@@ -36,7 +36,7 @@ with DAG(
         hook = PostgresHook(postgres_conn_id='weather_db')
         sql_query = """SELECT city_id, lat, lng FROM cities"""
         df = hook.get_pandas_df(sql_query)
-        df = df.head(1)
+        df = df.head(10)
 
         # set number of rows for each chunk
         chunk_size = 250
@@ -72,19 +72,24 @@ with DAG(
 	
         dfs = []
         df = pd.read_parquet(parquet_chunk_path, engine='pyarrow')
-        for _, row in df.iterrows():
+        city_ids = df['id'].to_list()
+        city_ids = ",".join(city_ids)
+        latitudes = df['lat'].to_list()
+        latitudes = ",".join(str(lat) for lat in latitudes)
+        longitudes = df['lng'].to_list()
+        longitudes = ",".join(str(long) for long in longitudes)
 
-            params = {
-                'latitude': row['lat'],
-                'longitude': row['lng'],
+        params = {
+                'latitude': latitudes,
+                'longitude': longitudes,
                 'start_date': start_date,
                 'end_date': end_date,
                 "models": climate_models,
                 'daily':daily_vars
             }
 
-            responses = openmeteo.weather_api(url, params)
-            response = responses[0]
+        responses = openmeteo.weather_api(url, params)
+        for city_id, response in zip(city_ids,responses):
             daily = response.Daily()
             temp_max = daily.Variables(0).ValuesAsNumpy()
             temp_min = daily.Variables(1).ValuesAsNumpy()
@@ -109,7 +114,7 @@ with DAG(
                 inclusive="left"
             )}
 
-            daily_data['city_id'] = row['city_id']
+            daily_data['city_id'] = city_id
             daily_data['temperature_2m_max'] = temp_max
             daily_data['temperature_2m_min'] = temp_min
             daily_data['temperature_2m_mean'] = temp_mean
@@ -129,8 +134,6 @@ with DAG(
             daily_df = pd.DataFrame(daily_data)
             dfs.append(daily_df)
 
-            time.sleep(0.5)
-
         comb = pd.concat(dfs, ignore_index=True)
 
         chunk_id = parquet_chunk_path.stem
@@ -140,11 +143,11 @@ with DAG(
         return comb.shape
 
 
-
     @task
     def fetch_daily_air_quality(parquet_chunk_path, **context):
         start_date = context['ds']
         end_date = context['ds']
+        parquet_chunk_path = Path(parquet_chunk_path)
 
         cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
         retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
@@ -155,19 +158,25 @@ with DAG(
                         'uv_index_clear_sky']
 
         url = "https://air-quality-api.open-meteo.com/v1/air-quality"
-        parquet_chunk_path = Path(parquet_chunk_path)
+        
         df = pd.read_parquet(parquet_chunk_path, engine='pyarrow')
         dfs = []
-        for _, row in df.iterrows():
-            params = {
-            "latitude": row['lat'],
-            "longitude": row['lng'],
-            "hourly": hourly_vars,
-            "start_date": start_date,
-            "end_date": end_date,
-        }
-            responses = openmeteo.weather_api(url, params = params)
-            response = responses[0]
+        city_ids = df['id'].to_list()
+        latitudes = df['lat'].to_list()
+        latitudes = ",".join(str(lat) for lat in latitudes)
+        longitudes = df['lng'].to_list()
+        longitudes = ",".join(str(long) for long in longitudes)
+
+        params = {
+                    "latitude": latitudes,
+                    "longitude": longitudes,
+                    "hourly": hourly_vars,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                }
+        responses = openmeteo.weather_api(url, params = params)
+
+        for city_id,response in zip(city_ids, responses):    
             hourly = response.Hourly()
             hourly_pm10 = hourly.Variables(0).ValuesAsNumpy()
             hourly_pm2_5 = hourly.Variables(1).ValuesAsNumpy()
@@ -191,7 +200,7 @@ with DAG(
                     inclusive = "left"
                 )
             }
-            hourly_data['city_id'] = row['city_id']
+            hourly_data['city_id'] = city_id
             hourly_data["pm10"] = hourly_pm10
             hourly_data["pm2_5"] = hourly_pm2_5
             hourly_data['carbon_monoxide'] = hourly_carbon_monoxide
@@ -208,12 +217,11 @@ with DAG(
 
             hourly_dataframe = pd.DataFrame(data = hourly_data)
             dfs.append(hourly_dataframe)
-
-            time.sleep(0.5)
-
+        
         comb = pd.concat(dfs, ignore_index=True)
         chunk_id = parquet_chunk_path.stem
-        file_path = Path(f'//opt/airflow/include/data/daily_air_quality_raw/{start_date}/{parquet_chunk_path}.parquet')
+        file_path = Path(f'//opt/airflow/include/data/daily_air_quality_raw/{start_date}/{chunk_id}.parquet')
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         comb.to_parquet(file_path, index=False)
         return comb.shape
 
@@ -231,18 +239,23 @@ with DAG(
         url = "https://flood-api.open-meteo.com/v1/flood"
         dfs = []
         df = pd.read_parquet(parquet_chunk_path, engine='pyarrow')
-        for _, row in df.iterrows():
-        
-            params = {
-                'latitude': row['lat'],
-                'longitude': row['lng'],
-                'start_date': start_date,
-                'end_date': end_date,
-                'daily':'river_discharge'
-            }   
+        city_ids = df['id'].to_list()
+        latitudes = df['lat'].to_list()
+        latitudes = ",".join(str(lat) for lat in latitudes)
+        longitudes = df['lng'].to_list()
+        longitudes = ",".join(str(long) for long in longitudes)
 
-            responses = openmeteo.weather_api(url, params = params)    
-            response = responses[0]
+        params = {
+        'latitude': latitudes,
+        'longitude': longitudes,
+        'start_date': start_date,
+        'end_date': end_date,
+        'daily':'river_discharge'
+            } 
+
+        responses = openmeteo.weather_api(url, params = params) 
+
+        for city_id, response in zip(city_ids, responses):
             daily = response.Daily()
             river_discharge = daily.Variables(0).ValuesAsNumpy()
 
@@ -253,13 +266,12 @@ with DAG(
                 inclusive="left"
             )}
 
-            daily_data['city_id'] = row['city_id']
+            daily_data['city_id'] = city_id
             daily_data['river_discharge'] = river_discharge
+
 
             daily_df = pd.DataFrame(daily_data)
             dfs.append(daily_df)
-
-            time.sleep(0.5)
 
         comb = pd.concat(dfs, ignore_index=True)
         chunk_id = parquet_chunk_path.stem
@@ -276,4 +288,8 @@ with DAG(
     fetch_air_quality = fetch_daily_air_quality.expand(parquet_chunk_path=cities)
     fetch_flood = fetch_daily_flood_data.expand(parquet_chunk_path=cities)
 
-    start >> cities >> [fetch_climate >> fetch_air_quality >> fetch_flood] >> end
+    start >> cities
+    cities >> fetch_climate
+    cities >> fetch_air_quality
+    cities >> fetch_flood
+    [fetch_climate >> fetch_air_quality >> fetch_flood] >> end
