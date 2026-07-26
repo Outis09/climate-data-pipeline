@@ -36,10 +36,10 @@ with DAG(
         hook = PostgresHook(postgres_conn_id='weather_db')
         sql_query = """SELECT city_id, lat, lng FROM cities"""
         df = hook.get_pandas_df(sql_query)
-        df = df.head(10)
+        df = df.head(50)
 
         # set number of rows for each chunk
-        chunk_size = 250
+        chunk_size = 50
         chunks = [df.iloc[i : i + chunk_size] for i in range(0,len(df), chunk_size)]
         
         chunk_storage_path.mkdir(parents=True, exist_ok=True)
@@ -72,8 +72,8 @@ with DAG(
 	
         dfs = []
         df = pd.read_parquet(parquet_chunk_path, engine='pyarrow')
-        city_ids = df['id'].to_list()
-        city_ids = ",".join(city_ids)
+        city_ids = df['city_id'].to_list()
+        # city_ids = ",".join(city_ids)
         latitudes = df['lat'].to_list()
         latitudes = ",".join(str(lat) for lat in latitudes)
         longitudes = df['lng'].to_list()
@@ -153,15 +153,14 @@ with DAG(
         retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
         openmeteo = openmeteo_requests.Client(session=retry_session)
 
-        hourly_vars = ['pm10','pm2_5', 'carbon_monoxide', 'nitrogen_dioxide', 'sulphur_dioxide', 'ozone',
-                        'carbon_dioxide', 'ammonia', 'aerosol_optical_depth', 'methane', 'dust', 'uv_index',
-                        'uv_index_clear_sky']
+        hourly_vars = ['pm10','pm2_5', 'carbon_monoxide', 'nitrogen_dioxide', 
+                       'sulphur_dioxide', 'ozone', 'carbon_dioxide']
 
         url = "https://air-quality-api.open-meteo.com/v1/air-quality"
         
         df = pd.read_parquet(parquet_chunk_path, engine='pyarrow')
         dfs = []
-        city_ids = df['id'].to_list()
+        city_ids = df['city_id'].to_list()
         latitudes = df['lat'].to_list()
         latitudes = ",".join(str(lat) for lat in latitudes)
         longitudes = df['lng'].to_list()
@@ -185,12 +184,6 @@ with DAG(
             hourly_sulphur_dioxide = hourly.Variables(4).ValuesAsNumpy()
             hourly_ozone = hourly.Variables(5).ValuesAsNumpy()
             hourly_carbon_dioxide = hourly.Variables(6).ValuesAsNumpy()
-            hourly_ammonia = hourly.Variables(7).ValuesAsNumpy()
-            hourly_aerosol_optical_depth = hourly.Variables(8).ValuesAsNumpy()
-            hourly_methane = hourly.Variables(9).ValuesAsNumpy()
-            hourly_dust = hourly.Variables(10).ValuesAsNumpy()
-            hourly_uv_index = hourly.Variables(11).ValuesAsNumpy()
-            hourly_uv_index_clear_sky = hourly.Variables(12).ValuesAsNumpy()
 
             hourly_data = {
                 "date": pd.date_range(
@@ -208,12 +201,6 @@ with DAG(
             hourly_data['sulphur_dioxide'] = hourly_sulphur_dioxide
             hourly_data['ozone'] = hourly_ozone
             hourly_data['carbon_dioxide'] = hourly_carbon_dioxide
-            hourly_data['ammonia'] = hourly_ammonia
-            hourly_data['aerosol_optical_depth'] = hourly_aerosol_optical_depth
-            hourly_data['methane'] = hourly_methane
-            hourly_data['dust'] = hourly_dust
-            hourly_data['uv_index'] = hourly_uv_index
-            hourly_data['uv_index_clear_sky'] = hourly_uv_index_clear_sky
 
             hourly_dataframe = pd.DataFrame(data = hourly_data)
             dfs.append(hourly_dataframe)
@@ -223,7 +210,7 @@ with DAG(
         file_path = Path(f'//opt/airflow/include/data/daily_air_quality_raw/{start_date}/{chunk_id}.parquet')
         file_path.parent.mkdir(parents=True, exist_ok=True)
         comb.to_parquet(file_path, index=False)
-        return comb.shape
+        return str(file_path)
 
 
     @task
@@ -239,7 +226,7 @@ with DAG(
         url = "https://flood-api.open-meteo.com/v1/flood"
         dfs = []
         df = pd.read_parquet(parquet_chunk_path, engine='pyarrow')
-        city_ids = df['id'].to_list()
+        city_ids = df['city_id'].to_list()
         latitudes = df['lat'].to_list()
         latitudes = ",".join(str(lat) for lat in latitudes)
         longitudes = df['lng'].to_list()
@@ -269,7 +256,6 @@ with DAG(
             daily_data['city_id'] = city_id
             daily_data['river_discharge'] = river_discharge
 
-
             daily_df = pd.DataFrame(daily_data)
             dfs.append(daily_df)
 
@@ -279,7 +265,41 @@ with DAG(
         file_name.parent.mkdir(parents=True, exist_ok=True)
         comb.to_parquet(file_name, index=False)
         return comb.shape
-    
+
+
+    @task
+    def aggregate_hourly_air_quality(parquet_paths):
+        dfs = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
+        df = pd.concat(dfs, ignore_index=True)
+
+        df['date'] = pd.to_datetime(df['date'])
+        df.sort_values(['city_id', 'date'],inplace=True)
+
+        df['day'] = df['date'].dt.date
+
+        # 24 hour averages for PM2.5, PM10
+        pm = df.groupby(['city_id', 'day']).agg(pm2_5_mean=('pm2_5', 'mean'),
+                                                pm10_mean=('pm10', 'mean'))
+
+        # max of 8-hour rolling averages
+        df['ozone_8h_rolling_avg'] = df.groupby(['city_id'])['ozone'].transform(lambda x: x.rolling(window=8, min_periods=8).mean())
+        df['carbon_monoxide_8h_rolling_avg'] = df.groupby(['city_id'])['ozone'].transform(lambda x: x.rolling(window=8, min_periods=8).mean())
+
+        ozone_rolling = df.groupby(['city_id', 'day']).agg(ozone_8h_max=('ozone_8h_rolling_avg', 'max'))
+        carbon_monoxide_rolling = df.groupby(['city_id', 'day']).agg(carbon_monoxide_8h_max=('carbon_monoxide_8h_rolling_avg', 'max'))
+
+        # max of 1-hour concentration
+        hourly_concenc = df.groupby(['city_id', 'day']).agg(
+            nitrogen_dioxide_1h_max=('nitrogen_dioxide', 'max'),
+            sulphur_dioxide_1h_max=('sulphur_dioxide', 'max')
+        )
+
+        daily_air_quality = (pm.merge(ozone_rolling, on=['city_id', 'day'], how='outer')\
+            .merge(carbon_monoxide_rolling, on=['city_id', 'day'], how='outer')\
+            .merge (hourly_concenc, on=['city_id', 'day'], how='outer')
+        )
+
+        return daily_air_quality.shape
     
     end = EmptyOperator(task_id='end')
 
@@ -287,9 +307,12 @@ with DAG(
     fetch_climate = fetch_daily_climate.expand(parquet_chunk_path=cities)
     fetch_air_quality = fetch_daily_air_quality.expand(parquet_chunk_path=cities)
     fetch_flood = fetch_daily_flood_data.expand(parquet_chunk_path=cities)
+    calc_daily_air_quality = aggregate_hourly_air_quality(fetch_air_quality) 
+
+
 
     start >> cities
     cities >> fetch_climate
     cities >> fetch_air_quality
     cities >> fetch_flood
-    [fetch_climate >> fetch_air_quality >> fetch_flood] >> end
+    [fetch_climate , fetch_air_quality , fetch_flood] >> end
