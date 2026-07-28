@@ -228,62 +228,10 @@ with DAG(
         return str(file_path)
 
 
-    # @task
-    # def fetch_daily_flood_data(parquet_chunk_path, **context):
-    #     start_date = context['ds']
-    #     end_date = context['ds']
-    #     parquet_chunk_path = Path(parquet_chunk_path)
-
-    #     cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
-    #     retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
-    #     openmeteo = openmeteo_requests.Client(session=retry_session)
-
-    #     url = "https://flood-api.open-meteo.com/v1/flood"
-    #     dfs = []
-    #     df = pd.read_parquet(parquet_chunk_path, engine='pyarrow')
-    #     city_ids = df['city_id'].to_list()
-    #     latitudes = df['lat'].to_list()
-    #     latitudes = ",".join(str(lat) for lat in latitudes)
-    #     longitudes = df['lng'].to_list()
-    #     longitudes = ",".join(str(long) for long in longitudes)
-
-    #     params = {
-    #     'latitude': latitudes,
-    #     'longitude': longitudes,
-    #     'start_date': start_date,
-    #     'end_date': end_date,
-    #     'daily':'river_discharge'
-    #         } 
-
-    #     responses = openmeteo.weather_api(url, params = params) 
-
-    #     for city_id, response in zip(city_ids, responses):
-    #         daily = response.Daily()
-    #         river_discharge = daily.Variables(0).ValuesAsNumpy()
-
-    #         daily_data = {"date": pd.date_range(
-    #             start=pd.to_datetime(daily.Time(), unit="s", utc=True),
-    #             end = pd.to_datetime(daily.TimeEnd(), unit="s", utc=True),
-    #             freq=pd.Timedelta(seconds=daily.Interval()),
-    #             inclusive="left"
-    #         )}
-
-    #         daily_data['city_id'] = city_id
-    #         daily_data['river_discharge'] = river_discharge
-
-    #         daily_df = pd.DataFrame(daily_data)
-    #         dfs.append(daily_df)
-
-    #     comb = pd.concat(dfs, ignore_index=True)
-    #     chunk_id = parquet_chunk_path.stem
-    #     file_name = Path(f'//opt/airflow/include/data/daily_flood_raw/{start_date}/{chunk_id}.parquet')
-    #     file_name.parent.mkdir(parents=True, exist_ok=True)
-    #     comb.to_parquet(file_name, index=False)
-    #     return comb.shape
 
 
     @task
-    def aggregate_hourly_air_quality(parquet_paths):
+    def aggregate_hourly_air_quality(parquet_paths,**context):
         dfs = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
         df = pd.concat(dfs, ignore_index=True)
 
@@ -293,7 +241,7 @@ with DAG(
         df['day'] = df['date'].dt.date
 
         # 24 hour averages for PM2.5, PM10
-        pm = df.groupby(['city_id', 'day']).agg(pm2_5_mean=('pm2_5', 'mean'),
+        pm = df.groupby(['city_id', 'day'], as_index=False).agg(pm2_5_mean=('pm2_5', 'mean'),
                                                 pm10_mean=('pm10', 'mean'))
 
         # max of 8-hour rolling averages
@@ -314,20 +262,55 @@ with DAG(
             .merge (hourly_concenc, on=['city_id', 'day'], how='outer')
         )
 
-        return daily_air_quality.shape
+        host_dir = Path('/opt/airflow/include/daily_air_quality_clean')
+        host_dir.mkdir(parents=True, exist_ok=True)
+        parquet_path = host_dir.joinpath(f"{context['ds']}.parquet")
+        daily_air_quality.to_parquet(parquet_path, engine='pyarrow', compression='snappy')
+
+        return str(parquet_path)
     
     end = EmptyOperator(task_id='end')
+
+ 
+
+    @task
+    def upsert_data(parquet_paths, table_name):
+        dfs = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
+        upsert_df = pd.concat(dfs, ignore_index=True)
+        upsert_df.replace({np.nan: None}, inplace=True)
+
+        hook = PostgresHook(postgres_conn_id='weather_db')
+
+        # table_name = "daily_climate"
+        rows = list(upsert_df.itertuples(index=False, name=None))
+
+        hook.upsert_rows(
+            table=table_name,
+            rows=rows,
+            target_fields=upsert_df.columns.to_list(),
+            conflict_fields=['city_id', 'date']
+        )
+    #    return f'Printing this table: {table_name} and paths: {parquet_paths}'
+
 
     cities = get_cities()
     fetch_climate = fetch_daily_climate.expand(parquet_chunk_path=cities)
     fetch_air_quality = fetch_daily_air_quality.expand(parquet_chunk_path=cities)
     # fetch_flood = fetch_daily_flood_data.expand(parquet_chunk_path=cities)
-    calc_daily_air_quality = aggregate_hourly_air_quality(fetch_air_quality) 
+    calc_daily_air_quality = aggregate_hourly_air_quality(fetch_air_quality)
 
+    upsert_climate = upsert_data.override(task_id="upsert_climate")(
+        fetch_climate, table_name='climate'
+    )
 
+    upsert_air_quality = upsert_data.override(task_id="upsert_air_quality")(
+            calc_daily_air_quality, table_name='air_quality'
+    )
 
-    # start >> cities
-    # cities >> fetch_climate
-    # cities >> fetch_air_quality
-    # cities >> fetch_flood
-    # [fetch_climate , fetch_air_quality , fetch_flood] >> end
+    start >> cities
+    cities >> fetch_climate
+    cities >> fetch_air_quality
+    fetch_air_quality >> calc_daily_air_quality
+    calc_daily_air_quality >> upsert_air_quality
+    fetch_climate >> upsert_climate
+    [upsert_climate , upsert_air_quality] >> end
