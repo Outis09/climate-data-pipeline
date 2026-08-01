@@ -1,27 +1,80 @@
 import pendulum
-import pandas as pd
-import numpy as np
-from pathlib import Path
-import openmeteo_requests
-import requests_cache
-from retry_requests import retry
 from airflow.sdk import DAG, task
-from airflow.operators.empty import EmptyOperator
-from airflow.timetables.interval import CronDataIntervalTimetable, DeltaDataIntervalTimetable
-from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.timetables.interval import CronDataIntervalTimetable
+from airflow.providers.smtp.notifications.smtp import SmtpNotifier
 from include.db import load_data, extract_cities
 from include.extract import extract_daily_climate, extract_daily_air_quality
 from include.transform import agg_hourly_air_quality
 
 
+
+task_fail_notify = SmtpNotifier(
+        to="sshakurace@gmail.com",
+        subject="Airflow Failure: {{ ti.task_id }} in {{ dag.dag_id }}",
+        html_content="""
+    <h3>Task Failure Alert</h3>
+    <p><b>DAG:</b> {{ "".join(dag.dag_id) }}</p>
+    <p><b>Task:</b> {{ ti.task_id }}</p>
+    <p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
+    <p><b>Error Message:</b></p>
+    <pre style="background-color: #f8d7da; padding: 10px; border: 1px solid #f5c6cb; color: #721c24;">
+    {{ exception }}
+    </pre>
+    <p><a href="{{ ti.log_url }}">Click here to view full Airflow logs</a></p>
+    
+"""
+    )
+
+dag_success_notify = SmtpNotifier(
+    to="sshakurace@gmail.com",
+    subject="Airflow Success | {{ dag.dag_id }} | {{ dag_run.run_id }} ",
+    html_content="""
+<h3 style="color: #155724;">DAG Completed Successfully</h3>
+
+<p><b>DAG:</b> {{ dag.dag_id }}</p>
+<p><b>Run ID:</b> {{ dag_run.run_id }}</p>
+<p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
+<p><b>Status:</b>
+    <span style="color: #155724; font-weight: bold;">
+        SUCCESS
+    </span>
+</p>
+
+<div style="background-color: #d4edda; padding: 10px; border: 1px solid #c3e6cb; color: #155724;">
+    All tasks in this DAG completed successfully.
+</div>
+
+<p>
+    <a href="{{ ti.log_url }}">Click here to view the Airflow logs</a>
+</p>
+"""
+)
+
+default_args = {
+    "owner": "airflow",
+    "retries": 0,
+    "on_failure_callback": task_fail_notify
+}
+
+
+
 with DAG(
     dag_id = 'climate',
+    on_success_callback=dag_success_notify,
+    # on_failure_callback=SmtpNotifier(
+    #     from_email="ayersamuel07@gmail.com",
+    #     to="ayersamuel07@gmail.com",
+    #     subject="Task {{ ti.task_id }} failed",
+    # ),
+    default_args=default_args,
     start_date=pendulum.datetime(2026, 1 , 1, tz='UTC'),
     schedule=CronDataIntervalTimetable("@daily", timezone='UTC'),
     catchup=False
 ):
     
     start = EmptyOperator(task_id='start')
+
 
     @task
     def get_cities() -> list[str]:
@@ -46,9 +99,6 @@ with DAG(
         parquet_path = agg_hourly_air_quality(parquet_paths, **context)
         return [str(parquet_path)]
     
-    end = EmptyOperator(task_id='end')
-
- 
 
     @task
     def upsert_data(parquet_paths, table_name):
@@ -68,6 +118,8 @@ with DAG(
     upsert_air_quality = upsert_data.override(task_id="upsert_air_quality")(
             calc_daily_air_quality, table_name='daily_air_quality'
     )
+
+    end = EmptyOperator(task_id='end')
 
     start >> cities
     cities >> fetch_climate
