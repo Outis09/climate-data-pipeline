@@ -3,9 +3,11 @@ from airflow.sdk import DAG, task
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.timetables.interval import CronDataIntervalTimetable
 from airflow.providers.smtp.notifications.smtp import SmtpNotifier
+from airflow.exceptions import AirflowException
+from datetime import datetime
 from include.db import load_data, extract_cities
 from include.extract import extract_daily_climate, extract_daily_air_quality
-from include.transform import agg_hourly_air_quality
+from include.transform import agg_hourly_air_quality, transform_daily_climate_chunks
 
 
 
@@ -62,11 +64,6 @@ default_args = {
 with DAG(
     dag_id = 'climate',
     on_success_callback=dag_success_notify,
-    # on_failure_callback=SmtpNotifier(
-    #     from_email="ayersamuel07@gmail.com",
-    #     to="ayersamuel07@gmail.com",
-    #     subject="Task {{ ti.task_id }} failed",
-    # ),
     default_args=default_args,
     start_date=pendulum.datetime(2026, 1 , 1, tz='UTC'),
     schedule=CronDataIntervalTimetable("@daily", timezone='UTC'),
@@ -97,7 +94,7 @@ with DAG(
     @task
     def aggregate_hourly_air_quality(parquet_paths,**context):
         parquet_path = agg_hourly_air_quality(parquet_paths, **context)
-        return [str(parquet_path)]
+        return parquet_path
     
 
     @task
@@ -105,18 +102,64 @@ with DAG(
         load_data(parquet_paths, table_name)
         return None
 
+    @task
+    def consolidate_daily_climate_chunks(parquet_paths, **context):
+        consolidated_loc = transform_daily_climate_chunks(parquet_paths, **context)
+        return consolidated_loc
+
+    @task
+    def validate_data(parquet_path, api_source, **context):
+        import great_expectations as gx
+
+        gx_root = '/opt/airflow/include/gx'
+        gx_context = gx.get_context(project_root_dir=gx_root)
+
+        run_date = datetime.strptime(context['ds'], "%Y-%m-%d")
+
+        year = str(run_date.year)
+        month = str(run_date.strftime("%m"))
+        day = str(run_date.strftime("%d"))
+
+        checkpoint = gx_context.checkpoints.get(f"daily_{api_source}_checkpoint") 
+        daily_batch_parameters = {"year":year,
+                                  "month":month,
+                                  "day":day}
+        result = checkpoint.run(batch_parameters=daily_batch_parameters)
+
+        if not result.success:
+            raise AirflowException(
+                f"{api_source} data failed GX validation for {context['ds']}"
+            )
+
+        return parquet_path
+
+
+         
+
 
     cities = get_cities()
     fetch_climate = fetch_daily_climate.expand(parquet_chunk_path=cities)
     fetch_air_quality = fetch_daily_air_quality.expand(parquet_chunk_path=cities)
     calc_daily_air_quality = aggregate_hourly_air_quality(fetch_air_quality)
+    consolidating_climate_chunks = consolidate_daily_climate_chunks(fetch_climate)
+
+
+    validate_climate = validate_data.override(task_id="validate_climate_pre_load")(
+        parquet_path=consolidating_climate_chunks,
+        api_source="climate"
+    )
+
+    validate_air_quality = validate_data.override(task_id="validate_air_quality_pre_load")(
+        parquet_path=calc_daily_air_quality,
+        api_source="air_quality"
+    )
 
     upsert_climate = upsert_data.override(task_id="upsert_climate")(
-        fetch_climate, table_name='daily_climate'
+        validate_climate, table_name='daily_climate'
     )
 
     upsert_air_quality = upsert_data.override(task_id="upsert_air_quality")(
-            calc_daily_air_quality, table_name='daily_air_quality'
+            validate_air_quality, table_name='daily_air_quality'
     )
 
     end = EmptyOperator(task_id='end')
@@ -124,7 +167,14 @@ with DAG(
     start >> cities
     cities >> fetch_climate
     cities >> fetch_air_quality
+
+    fetch_climate >> consolidating_climate_chunks
     fetch_air_quality >> calc_daily_air_quality
-    calc_daily_air_quality >> upsert_air_quality
-    fetch_climate >> upsert_climate
+
+    calc_daily_air_quality >> validate_air_quality
+    consolidating_climate_chunks >> validate_climate
+
+    validate_air_quality >> upsert_air_quality
+    validate_climate >> upsert_climate
+
     [upsert_climate , upsert_air_quality] >> end
