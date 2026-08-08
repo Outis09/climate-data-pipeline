@@ -7,6 +7,18 @@ def create_daily_climate_pre_load_suite(context):
     pre_load_climate_suite = gx.ExpectationSuite(name=suite_name)
     pre_load_climate_suite = context.suites.add_or_update(pre_load_climate_suite)
 
+    climate_cols = ['city_id', 'date', 'temperature_2m_max', 'temperature_2m_mean', 'temperature_2m_min', 'relative_humidity_2m_max', 'relative_humidity_2m_mean',
+                    'relative_humidity_2m_min', 'cloud_cover_mean', 'soil_moisture_0_to_10cm_mean', 'wind_speed_10m_mean', 'wind_speed_10m_max', 'shortwave_radiation_sum', 'soil_moisture_0_to_10cm_mean', 'precipitation_sum',
+                         'rain_sum', 'snowfall_sum', 'river_discharge']
+
+    pre_load_climate_suite.add_expectation(gx.expectations.ExpectTableColumnsToMatchSet(
+        column_set=climate_cols
+    ))
+
+    pre_load_climate_suite.add_expectation(gx.expectations.ExpectCompoundColumnsToBeUnique(
+        column_list=climate_cols[:2]
+    ))
+
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectColumnPairValuesAToBeGreaterThanB(
         column_A='temperature_2m_max',
         column_B='temperature_2m_mean',
@@ -67,8 +79,17 @@ def create_daily_air_quality_pre_load_suite(context):
     pre_load_air_quality_suite = gx.ExpectationSuite(name=suite_name)
     pre_load_air_quality_suite =  context.suites.add_or_update(pre_load_air_quality_suite)
 
-    air_quality_cols = ['pm2_5_mean', 'pm10_mean', 'nitrogen_dioxide_1h_max', 'sulphur_dioxide_1h_max', 'ozone_8h_max', 'carbon_dioxide_mean', 'carbon_monoxide_8h_max']
-    for air_quality_col in air_quality_cols:
+    air_quality_cols = ['city_id','date','pm2_5_mean', 'pm10_mean', 'nitrogen_dioxide_1h_max', 'sulphur_dioxide_1h_max', 'ozone_8h_max', 'carbon_dioxide_mean', 'carbon_monoxide_8h_max']
+
+    pre_load_air_quality_suite.add_expectation(gx.expectations.ExpectTableColumnsToMatchSet(
+        column_set=air_quality_cols
+    ))
+
+    pre_load_air_quality_suite.add_expectation(gx.expectations.ExpectCompoundColumnsToBeUnique(
+        column_list=air_quality_cols[:2]
+    ))
+
+    for air_quality_col in air_quality_cols[2:]:
         pre_load_air_quality_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
             column=air_quality_col,
             min_value=0,
