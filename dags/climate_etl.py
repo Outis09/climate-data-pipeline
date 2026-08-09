@@ -4,10 +4,10 @@ from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.timetables.interval import CronDataIntervalTimetable
 from airflow.providers.smtp.notifications.smtp import SmtpNotifier
 from airflow.exceptions import AirflowException
-from datetime import datetime
+from datetime import datetime, timedelta
 from include.db import load_data, extract_cities
 from include.extract import extract_daily_climate, extract_daily_air_quality, extract_daily_land_surface
-from include.transform import agg_hourly_air_quality, transform_daily_climate_chunks
+from include.transform import agg_hourly_air_quality, transform_daily_climate_chunks, transform_daily_land_surface
 
 
 
@@ -101,16 +101,16 @@ with DAG(
         parquet_path = agg_hourly_air_quality(parquet_paths, **context)
         return parquet_path
     
-
-    @task
-    def upsert_data(parquet_paths, table_name):
-        load_data(parquet_paths, table_name)
-        return None
-
     @task
     def consolidate_daily_climate_chunks(parquet_paths, **context):
         consolidated_loc = transform_daily_climate_chunks(parquet_paths, **context)
         return consolidated_loc
+
+
+    @task
+    def consolidate_daily_land_surface(parquet_paths, **context):
+        trnasformed_loc = transform_daily_land_surface(parquet_paths, **context)
+        return trnasformed_loc
 
     @task
     def validate_data(parquet_path, api_source, **context):
@@ -138,7 +138,11 @@ with DAG(
 
         return parquet_path
 
-
+        
+    @task
+    def upsert_data(parquet_paths, table_name):
+        load_data(parquet_paths, table_name)
+        return None
          
 
 
@@ -149,6 +153,7 @@ with DAG(
 
     calc_daily_air_quality = aggregate_hourly_air_quality(fetch_air_quality)
     consolidating_climate_chunks = consolidate_daily_climate_chunks(fetch_climate)
+    transform_land_surface = consolidate_daily_land_surface(fetch_land_surface)
 
 
     validate_climate = validate_data.override(task_id="validate_climate_pre_load")(
@@ -172,16 +177,4 @@ with DAG(
     end = EmptyOperator(task_id='end')
 
     start >> cities
-    cities >> fetch_climate
-    cities >> fetch_air_quality
-
-    fetch_climate >> consolidating_climate_chunks
-    fetch_air_quality >> calc_daily_air_quality
-
-    calc_daily_air_quality >> validate_air_quality
-    consolidating_climate_chunks >> validate_climate
-
-    validate_air_quality >> upsert_air_quality
-    validate_climate >> upsert_climate
-
     [upsert_climate , upsert_air_quality] >> end
