@@ -3,6 +3,8 @@ import openmeteo_requests
 import requests_cache
 from retry_requests import retry
 from pathlib import Path
+from airflow.exceptions import AirflowException
+
 
 def extract_daily_climate(parquet_chunk_path, **context):      
         start_date = context['ds']
@@ -103,7 +105,7 @@ def extract_daily_climate(parquet_chunk_path, **context):
         comb = pd.concat(dfs, ignore_index=True)
 
         chunk_id = parquet_chunk_path.stem
-        file_name = Path(f'//opt/airflow/include/data/daily_climate/{start_date}/{chunk_id}.parquet')
+        file_name = Path(f'//opt/airflow/include/data/raw/daily_climate/{start_date}/{chunk_id}.parquet')
         file_name.parent.mkdir(parents=True, exist_ok=True)
         comb.to_parquet(file_name, engine='pyarrow', compression='snappy', index=False)
         return str(file_name)
@@ -172,7 +174,78 @@ def extract_daily_air_quality(parquet_chunk_path, **context):
         
         comb = pd.concat(dfs, ignore_index=True)
         chunk_id = parquet_chunk_path.stem
-        file_path = Path(f'//opt/airflow/include/data/daily_air_quality_raw/{start_date}/{chunk_id}.parquet')
+        file_path = Path(f'//opt/airflow/include/data/raw/daily_air_quality/{start_date}/{chunk_id}.parquet')
         file_path.parent.mkdir(parents=True, exist_ok=True)
         comb.to_parquet(file_path, index=False)
         return str(file_path)
+
+
+def extract_daily_land_surface(parquet_paths, **context):
+    logical_date = context['ds_nodash']
+    parquet_chunk_path = Path(parquet_paths)
+
+    cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
+    retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
+
+    url = "https://power.larc.nasa.gov/api/temporal/daily/point"
+    variables = ["PS", "TS", "TQV", 'SLP', 'GWETROOT', 'ALLSKY_SFC_LW_DWN', 'ALLSKY_SFC_SW_UP', 'ALLSKY_SFC_LW_UP', 'TOA_SW_DWN', 'ALLSKY_SRF_ALB']
+    parameters = ','.join(variables)
+    df = pd.read_parquet(parquet_chunk_path, engine='pyarrow')
+    records = []
+
+    for _,row in df.iterrows():
+        latitude = row['lat']
+        longitude = row['lng']
+        city_id = row['city_id']
+
+        params = {
+        "parameters": parameters,
+        "community": "RE",
+        "longitude": longitude, 
+        "latitude": latitude,
+        "start": logical_date,
+        "end": logical_date,
+        "format": "JSON",
+        "time-standard":"UTC"
+        }
+
+        try:
+            response = retry_session.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+        except:
+             raise AirflowException(f"Failed to retrieve NASA Power Data for city id: {city_id} lat: {latitude} lon: {longitude}")
+
+        ps = data['properties']['parameter']['PS'].get(logical_date)
+        tqv = data['properties']['parameter']['TQV'].get(logical_date)
+        gwetroot = data['properties']['parameter']['GWETROOT'].get(logical_date)
+        ts = data['properties']['parameter']['TS'].get(logical_date)
+        slp = data['properties']['parameter']['SLP'].get(logical_date)
+        allsky_sfc_lw_dwn = data['properties']['parameter']['ALLSKY_SFC_LW_DWN'].get(logical_date)
+        allsky_sfc_sw_up = data['properties']['parameter']['ALLSKY_SFC_SW_UP'].get(logical_date)
+        allsky_sfc_lw_up = data['properties']['parameter']['ALLSKY_SFC_LW_UP'].get(logical_date)
+        toa_sw_dwn = data['properties']['parameter']['TOA_SW_DWN'].get(logical_date)
+        allsky_srf_alb = data['properties']['parameter']['ALLSKY_SRF_ALB'].get(logical_date)
+
+        data_df = {'date': context['ds']}
+        data_df['city_id'] = city_id
+        data_df['surface_pressure'] = ps
+        data_df['total_precipitable_water'] = tqv
+        data_df['sea_level_pressure'] = slp
+        data_df['land_surface_temp'] = ts
+        data_df['root_zone_soil_wetness'] = gwetroot
+        data_df['surface_longwave_downward_irradiance'] = allsky_sfc_lw_dwn
+        data_df['surface_shortwave_upward_irradiance'] = allsky_sfc_sw_up
+        data_df['surface_longwave_upward_irradiance'] = allsky_sfc_lw_up
+        data_df['total_solar_irradiance'] = toa_sw_dwn
+        data_df['all_sky_surface_albedo'] = allsky_srf_alb
+
+        records.append(data_df)
+
+    daily_land_surface = pd.DataFrame(records)
+    chunk_id = parquet_chunk_path.stem
+    file_path = Path(f'/opt/airflow/include/data/raw/daily_land_surface/{context['ds']}/{chunk_id}.parquet')
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    daily_land_surface.to_parquet(file_path, index=False)
+    return str(file_path)
+        
