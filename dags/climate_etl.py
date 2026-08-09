@@ -6,7 +6,7 @@ from airflow.providers.smtp.notifications.smtp import SmtpNotifier
 from airflow.exceptions import AirflowException
 from datetime import datetime
 from include.db import load_data, extract_cities
-from include.extract import extract_daily_climate, extract_daily_air_quality
+from include.extract import extract_daily_climate, extract_daily_air_quality, extract_daily_land_surface
 from include.transform import agg_hourly_air_quality, transform_daily_climate_chunks
 
 
@@ -20,7 +20,7 @@ task_fail_notify = SmtpNotifier(
     <p><b>Task:</b> {{ ti.task_id }}</p>
     <p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
     <p><b>Error Message:</b></p>
-    <pre style="background-color: #f8d7da; padding: 10px; border: 1px solid #f5c6cb; color: #721c24;">
+    <pre style="color: #721c24;">
     {{ exception }}
     </pre>
     <p><a href="{{ ti.log_url }}">Click here to view full Airflow logs</a></p>
@@ -43,7 +43,7 @@ dag_success_notify = SmtpNotifier(
     </span>
 </p>
 
-<div style="background-color: #d4edda; padding: 10px; border: 1px solid #c3e6cb; color: #155724;">
+<div style="color: #155724;">
     All tasks in this DAG completed successfully.
 </div>
 
@@ -90,6 +90,11 @@ with DAG(
         file_name = extract_daily_air_quality(parquet_chunk_path, **context)
         return file_name
     
+
+    @task
+    def fetch_daily_land_surface(parquet_chunk_path, **context):
+        file_name = extract_daily_land_surface(parquet_chunk_path, **context)
+        return file_name
 
     @task
     def aggregate_hourly_air_quality(parquet_paths,**context):
@@ -140,6 +145,8 @@ with DAG(
     cities = get_cities()
     fetch_climate = fetch_daily_climate.expand(parquet_chunk_path=cities)
     fetch_air_quality = fetch_daily_air_quality.expand(parquet_chunk_path=cities)
+    fetch_land_surface = fetch_daily_land_surface.expand(parquet_chunk_path=cities)
+
     calc_daily_air_quality = aggregate_hourly_air_quality(fetch_air_quality)
     consolidating_climate_chunks = consolidate_daily_climate_chunks(fetch_climate)
 
