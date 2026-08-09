@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from datetime import datetime, timedelta
 
 def agg_hourly_air_quality(parquet_paths,**context):
         dfs = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
@@ -12,7 +13,8 @@ def agg_hourly_air_quality(parquet_paths,**context):
 
         # 24 hour averages for PM2.5, PM10
         pm = df.groupby(['city_id', 'day'], as_index=False).agg(pm2_5_mean=('pm2_5', 'mean'),
-                                                pm10_mean=('pm10', 'mean'))
+                                                pm10_mean=('pm10', 'mean'),
+                                                carbon_dioxide_mean=('carbon_dioxide', 'mean'))
 
         # max of 8-hour rolling averages
         df['ozone_8h_rolling_avg'] = df.groupby(['city_id'])['ozone'].transform(lambda x: x.rolling(window=8, min_periods=8).mean())
@@ -34,8 +36,33 @@ def agg_hourly_air_quality(parquet_paths,**context):
 
         daily_air_quality.rename(columns={'day':'date'}, inplace=True)
 
-        parquet_path = Path(f'/opt/airflow/include/daily_air_quality_clean/{context['ds']}.parquet')
+        parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_air_quality/{context['ds']}.parquet')
         parquet_path.parent.mkdir(parents=True, exist_ok=True)
-        daily_air_quality.to_parquet(parquet_path, engine='pyarrow', compression='snappy')
+        daily_air_quality.to_parquet(parquet_path, engine='pyarrow', compression='snappy', index=False)
 
+        return str(parquet_path)
+
+def transform_daily_climate_chunks(parquet_paths, **context):
+        consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
+        consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
+
+        parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_climate/{context['ds']}.parquet')
+        parquet_path.parent.mkdir(parents=True, exist_ok=True)
+        consolidated_df.to_parquet(parquet_path, engine='pyarrow', compression='snappy', index=False)
+        return str(parquet_path)
+
+def transform_daily_land_surface(parquet_paths, **context):
+        logical_date = datetime.strptime(context['ds'], '%Y-%m-%d').date()
+        logical_date = logical_date - timedelta(days=1)
+        consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
+        consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
+
+        excl_cols = ['date', 'city_id']
+        for col in consolidated_df.columns:
+                if col not in excl_cols:
+                    consolidated_df[col] = consolidated_df[col].replace(-999, None)
+
+        parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_land_surface/{logical_date}.parquet')
+        parquet_path.parent.mkdir(parents=True, exist_ok=True)
+        consolidated_df.to_parquet(parquet_path, engine='pyarrow', index=False)
         return str(parquet_path)
