@@ -119,7 +119,10 @@ with DAG(
         gx_root = '/opt/airflow/include/gx'
         gx_context = gx.get_context(project_root_dir=gx_root)
 
-        run_date = datetime.strptime(context['ds'], "%Y-%m-%d")
+        if api_source == 'land_surface':
+            run_date = datetime.strptime(context['ds'], "%Y-%m-%d").date() - timedelta(days=1)
+        else:
+            run_date = datetime.strptime(context['ds'], "%Y-%m-%d")
 
         year = str(run_date.year)
         month = str(run_date.strftime("%m"))
@@ -164,6 +167,11 @@ with DAG(
     validate_air_quality = validate_data.override(task_id="validate_air_quality_pre_load")(
         parquet_path=calc_daily_air_quality,
         api_source="air_quality"
+    )
+
+    validate_land_surface = validate_data.override(task_id='validate_land_surface_pre_load')(
+        parquet_path=transform_land_surface,
+        api_source='land_surface'
     )
 
     upsert_climate = upsert_data.override(task_id="upsert_climate")(
