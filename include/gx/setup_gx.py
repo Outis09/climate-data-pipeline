@@ -97,6 +97,64 @@ def create_daily_air_quality_pre_load_suite(context):
             mostly=1.0
         ))
 
+def create_daily_land_surface_pre_load_suite(context):
+    suite_name = "pre_load_land_surface"
+    pre_load_land_surface_suite = gx.ExpectationSuite(name=suite_name)
+    pre_load_land_surface_suite = context.suties.add_or_update(pre_load_land_surface_suite)
+
+    land_surface_cols = ['city_id', 'date', 'surface_pressure', 'total_precipitable_water', 'sea_level_pressure', 'land_surface_temp'
+                         'root_zone_soil_wetness', 'surface_longwave_downward_irradiance', 'surface_shortwave_upward_irradiance',
+                         'surface_longwave_upward_irradiance', 'total_solar_irradiance', 'all_sky_surface_albedo']
+
+    pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectTableColumnsToMatchSet(
+        column_set=land_surface_cols
+    ))
+
+    pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectCompoundColumnsToBeUnique(
+            column_list=land_surface_cols[:2]
+        ))
+
+    pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
+        column=land_surface_cols[5],
+        min_value=-125,
+        max_value=80,
+        mostly=1.0
+    ))
+
+    pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
+            column=land_surface_cols[3],
+            min_value=0,
+            max_value=100,
+            mostly=1.0
+        ))
+
+    for zero_one_col in [land_surface_cols[6], land_surface_cols[11]]:
+        pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
+                column=zero_one_col,
+                min_value=0,
+                max_value=1,
+                mostly=1.0
+            ))
+
+    for five_hun_thou_one_col in [land_surface_cols[2], land_surface_cols[4]]:
+        pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
+                        column=five_hun_thou_one_col,
+                        min_value=500,
+                        max_value=1100,
+                        mostly=1.0
+            ))
+
+    for zero_thou_five_col in land_surface_cols[7:11]:
+        pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
+                column=zero_thou_five_col,
+                min_value=0,
+                max_value=1500,
+                mostly=1.0
+            ))
+
+    
+
+
 def configure_checkpoint(context, api_source):
 
     expectation_suite = context.suites.get(name=f"pre_load_{api_source}")
@@ -147,6 +205,8 @@ if __name__ == '__main__':
 
     create_daily_air_quality_pre_load_suite(context)
 
-    sources = ['climate', 'air_quality']
+    create_daily_land_surface_pre_load_suite(context)
+
+    sources = ['climate', 'air_quality', 'land_surface']
     for source in sources:
         configure_checkpoint(context, source)
