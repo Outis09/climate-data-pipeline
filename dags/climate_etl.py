@@ -186,6 +186,10 @@ with DAG(
             validate_air_quality, table_name='daily_air_quality'
     )
 
+    upsert_land_surface = upsert_data.override(task_id="upsert_land_surface")(
+        validate_land_surface, table_name='daily_land_surface'
+    )
+
     end = EmptyOperator(task_id='end')
 
     start >> cities
