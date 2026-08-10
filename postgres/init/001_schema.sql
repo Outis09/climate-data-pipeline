@@ -83,3 +83,35 @@ CREATE TABLE IF NOT EXISTS daily_air_quality (
         FOREIGN KEY (city_id)
         REFERENCES cities(city_id)
 );
+
+CREATE TABLE IF NOT EXISTS daily_land_surface (
+    id BIGINT GENERATED ALWAYS AS IDENTITY,
+
+    city_id BIGINT NOT NULL,
+    date DATE NOT NULL,
+
+    surface_pressure NUMERIC(10,2),
+    total_precipitable_water NUMERIC(10,2),
+    sea_level_pressure NUMERIC(10,2),
+    land_surface_temp NUMERIC(8,2),
+
+    root_zone_soil_wetness NUMERIC(8,4),
+
+    surface_longwave_downward_irradiance NUMERIC(10,2),
+    surface_shortwave_upward_irradiance NUMERIC(10,2),
+    surface_longwave_upward_irradiance NUMERIC(10,2),
+    total_solar_irradiance NUMERIC(10,2),
+
+    all_sky_surface_albedo NUMERIC(6,4),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+
+    CONSTRAINT uq_daily_land_surface_city_day
+        UNIQUE (date, city_id),
+
+    CONSTRAINT fk_daily_land_surface_city
+        FOREIGN KEY (city_id)
+        REFERENCES cities(city_id)
+);
