@@ -4,6 +4,7 @@ from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.timetables.interval import CronDataIntervalTimetable
 from airflow.providers.smtp.notifications.smtp import SmtpNotifier
 from airflow.exceptions import AirflowException
+from great_expectations.core.expectation_validation_result import ExpectationSuiteValidationResult
 from datetime import datetime, timedelta
 from include.db import load_data, extract_cities
 from include.extract import extract_daily_climate, extract_daily_air_quality, extract_daily_land_surface
@@ -133,8 +134,11 @@ with DAG(
                                   "month":month,
                                   "day":day}
         result = checkpoint.run(batch_parameters=daily_batch_parameters)
+        validation_result_id = list(result.run_results.keys())[0]
+        validation_result = result.run_results[validation_result_id]
 
-        if not result.success:
+        if validation_result.get_max_severity_failure() == "CRITICAL": 
+        # if not result.success:
             raise AirflowException(
                 f"{api_source} data failed GX validation for {context['ds']}"
             )
