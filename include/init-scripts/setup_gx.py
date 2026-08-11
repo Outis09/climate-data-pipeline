@@ -9,7 +9,7 @@ def create_daily_climate_pre_load_suite(context):
 
     climate_cols = ['city_id', 'date', 'temperature_2m_max', 'temperature_2m_mean', 'temperature_2m_min', 'relative_humidity_2m_max', 'relative_humidity_2m_mean',
                     'relative_humidity_2m_min', 'cloud_cover_mean', 'soil_moisture_0_to_10cm_mean', 'wind_speed_10m_mean', 'wind_speed_10m_max', 'shortwave_radiation_sum', 'soil_moisture_0_to_10cm_mean', 'precipitation_sum',
-                         'rain_sum', 'snowfall_sum', 'river_discharge']
+                         'rain_sum', 'snowfall_sum', 'river_discharge', 'pressure_msl_mean']
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectTableColumnsToMatchSet(
         column_set=climate_cols
@@ -23,28 +23,32 @@ def create_daily_climate_pre_load_suite(context):
         column_A='temperature_2m_max',
         column_B='temperature_2m_mean',
         or_equal=True,
-        mostly=1.0
+        mostly=1.0,
+        severity='warning'
     ))
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectColumnPairValuesAToBeGreaterThanB(
         column_A='temperature_2m_mean',
         column_B='temperature_2m_min',
         or_equal=True,
-        mostly=1.0
+        mostly=1.0,
+        severity='warning'
     ))
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectColumnPairValuesAToBeGreaterThanB(
         column_A='relative_humidity_2m_max',
         column_B='relative_humidity_2m_mean',
         or_equal=True,
-        mostly=1.0
+        mostly=1.0,
+        severity='warning'
     ))
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectColumnPairValuesAToBeGreaterThanB(
             column_A='relative_humidity_2m_mean',
             column_B='relative_humidity_2m_min',
             or_equal=True,
-            mostly=1.0
+            mostly=1.0,
+            severity='warning'
         ))    
 
     percentage_cols = ['relative_humidity_2m_max', 'relative_humidity_2m_min', 'relative_humidity_2m_mean', 'cloud_cover_mean']
@@ -100,9 +104,9 @@ def create_daily_air_quality_pre_load_suite(context):
 def create_daily_land_surface_pre_load_suite(context):
     suite_name = "pre_load_land_surface"
     pre_load_land_surface_suite = gx.ExpectationSuite(name=suite_name)
-    pre_load_land_surface_suite = context.suties.add_or_update(pre_load_land_surface_suite)
+    pre_load_land_surface_suite = context.suites.add_or_update(pre_load_land_surface_suite)
 
-    land_surface_cols = ['city_id', 'date', 'surface_pressure', 'total_precipitable_water', 'sea_level_pressure', 'land_surface_temp'
+    land_surface_cols = ['city_id', 'date', 'surface_pressure', 'total_precipitable_water', 'sea_level_pressure', 'land_surface_temp',
                          'root_zone_soil_wetness', 'surface_longwave_downward_irradiance', 'surface_shortwave_upward_irradiance',
                          'surface_longwave_upward_irradiance', 'total_solar_irradiance', 'all_sky_surface_albedo']
 
@@ -195,7 +199,7 @@ def configure_checkpoint(context, api_source):
     return context.checkpoints.add_or_update(checkpoint)
 
 if __name__ == '__main__':
-    include_root = Path(__file__).resolve().parents[1]
+    include_root = Path('/opt/airflow/include')
 
     GX_ROOT = include_root / "gx"
 

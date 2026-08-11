@@ -1,0 +1,14 @@
+{
+    "noaa_power_extraction_pool": {
+        "description": "Pool for NOAA Power Extraction Tasks",
+        "slots": 4
+    },
+    "open_meteo_extraction_pool": {
+        "description": "Pool for Open Meteo Extraction Tasks",
+        "slots": 4
+    },
+    "db_upsert_pool": {
+        "description": "Pool for Database Upsert Tasks",
+        "slots": 4
+    }
+}
