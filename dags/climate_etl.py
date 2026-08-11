@@ -68,8 +68,7 @@ with DAG(
     default_args=default_args,
     start_date=pendulum.datetime(2026, 1 , 1, tz='UTC'),
     schedule=CronDataIntervalTimetable("@daily", timezone='UTC'),
-    catchup=False
-):
+    catchup=False,):
     
     start = EmptyOperator(task_id='start')
 
@@ -80,19 +79,19 @@ with DAG(
         return chunk_paths
 
 
-    @task
+    @task(pool="open_meteo_extraction_pool")
     def fetch_daily_climate(parquet_chunk_path, **context):      
         file_name = extract_daily_climate(parquet_chunk_path, **context)
         return file_name
 
 
-    @task
+    @task(pool="open_meteo_extraction_pool")
     def fetch_daily_air_quality(parquet_chunk_path, **context):
         file_name = extract_daily_air_quality(parquet_chunk_path, **context)
         return file_name
     
 
-    @task
+    @task(pool="noaa_power_extraction_pool")
     def fetch_daily_land_surface(parquet_chunk_path, **context):
         file_name = extract_daily_land_surface(parquet_chunk_path, **context)
         return file_name
@@ -146,7 +145,7 @@ with DAG(
         return parquet_path
 
         
-    @task
+    @task(pool="db_upsert_pool")
     def upsert_data(parquet_paths, table_name):
         load_data(parquet_paths, table_name)
         return None
@@ -193,4 +192,4 @@ with DAG(
     end = EmptyOperator(task_id='end')
 
     start >> cities
-    [upsert_climate , upsert_air_quality] >> end
+    [upsert_climate , upsert_air_quality, upsert_land_surface] >> end
