@@ -1,9 +1,11 @@
+from datetime import timedelta, datetime
+import time
 import pandas as pd
 import openmeteo_requests
 import requests_cache
 from retry_requests import retry
 from pathlib import Path
-from airflow.exceptions import AirflowException
+from airflow.sdk.exceptions import AirflowException
 
 
 def extract_daily_climate(parquet_chunk_path, **context):      
@@ -181,7 +183,9 @@ def extract_daily_air_quality(parquet_chunk_path, **context):
 
 
 def extract_daily_land_surface(parquet_paths, **context):
-    logical_date = context['ds_nodash']
+    logical_date = datetime.strptime(context['ds'], '%Y-%m-%d').date()
+    logical_date = logical_date - timedelta(days=1)
+    logical_date_no_dash = logical_date.strftime('%Y%m%d')
     parquet_chunk_path = Path(parquet_paths)
 
     cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
@@ -203,8 +207,8 @@ def extract_daily_land_surface(parquet_paths, **context):
         "community": "RE",
         "longitude": longitude, 
         "latitude": latitude,
-        "start": logical_date,
-        "end": logical_date,
+        "start": logical_date_no_dash,
+        "end": logical_date_no_dash,
         "format": "JSON",
         "time-standard":"UTC"
         }
@@ -216,35 +220,17 @@ def extract_daily_land_surface(parquet_paths, **context):
         except:
              raise AirflowException(f"Failed to retrieve NASA Power Data for city id: {city_id} lat: {latitude} lon: {longitude}")
 
-        ps = data['properties']['parameter']['PS'].get(logical_date)
-        tqv = data['properties']['parameter']['TQV'].get(logical_date)
-        gwetroot = data['properties']['parameter']['GWETROOT'].get(logical_date)
-        ts = data['properties']['parameter']['TS'].get(logical_date)
-        slp = data['properties']['parameter']['SLP'].get(logical_date)
-        allsky_sfc_lw_dwn = data['properties']['parameter']['ALLSKY_SFC_LW_DWN'].get(logical_date)
-        allsky_sfc_sw_up = data['properties']['parameter']['ALLSKY_SFC_SW_UP'].get(logical_date)
-        allsky_sfc_lw_up = data['properties']['parameter']['ALLSKY_SFC_LW_UP'].get(logical_date)
-        toa_sw_dwn = data['properties']['parameter']['TOA_SW_DWN'].get(logical_date)
-        allsky_srf_alb = data['properties']['parameter']['ALLSKY_SRF_ALB'].get(logical_date)
-
-        data_df = {'date': context['ds']}
-        data_df['city_id'] = city_id
-        data_df['surface_pressure'] = ps
-        data_df['total_precipitable_water'] = tqv
-        data_df['sea_level_pressure'] = slp
-        data_df['land_surface_temp'] = ts
-        data_df['root_zone_soil_wetness'] = gwetroot
-        data_df['surface_longwave_downward_irradiance'] = allsky_sfc_lw_dwn
-        data_df['surface_shortwave_upward_irradiance'] = allsky_sfc_sw_up
-        data_df['surface_longwave_upward_irradiance'] = allsky_sfc_lw_up
-        data_df['total_solar_irradiance'] = toa_sw_dwn
-        data_df['all_sky_surface_albedo'] = allsky_srf_alb
+        data_df = pd.DataFrame(data['properties']['parameter'])
+        data_df.index.name = 'date'
+        data_df = data_df.reset_index()
+        data_df['date'] = pd.to_datetime(data_df['date'], format="%Y%m%d").dt.strftime("%Y-%m-%d")
 
         records.append(data_df)
+        time.sleep(1)
 
-    daily_land_surface = pd.DataFrame(records)
+    daily_land_surface = pd.concat(records) #pd.DataFrame(records)
     chunk_id = parquet_chunk_path.stem
-    file_path = Path(f'/opt/airflow/include/data/raw/daily_land_surface/{context['ds']}/{chunk_id}.parquet')
+    file_path = Path(f'/opt/airflow/include/data/raw/daily_land_surface/{logical_date}/{chunk_id}.parquet')
     file_path.parent.mkdir(parents=True, exist_ok=True)
     daily_land_surface.to_parquet(file_path, index=False)
     return str(file_path)
