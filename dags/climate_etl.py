@@ -4,7 +4,6 @@ from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.timetables.interval import CronDataIntervalTimetable
 from airflow.providers.smtp.notifications.smtp import SmtpNotifier
 from airflow.exceptions import AirflowException
-from great_expectations.core.expectation_validation_result import ExpectationSuiteValidationResult
 from datetime import datetime, timedelta
 from include.db import load_data, extract_cities
 from include.extract import extract_daily_climate, extract_daily_air_quality, extract_daily_land_surface
@@ -80,20 +79,20 @@ with DAG(
 
 
     @task(pool="open_meteo_extraction_pool")
-    def fetch_daily_climate(parquet_chunk_path, **context):      
-        file_name = extract_daily_climate(parquet_chunk_path, **context)
+    def fetch_daily_climate(period, parquet_chunk_path, **context):      
+        file_name = extract_daily_climate(period, parquet_chunk_path, **context)
         return file_name
 
 
     @task(pool="open_meteo_extraction_pool")
-    def fetch_daily_air_quality(parquet_chunk_path, **context):
-        file_name = extract_daily_air_quality(parquet_chunk_path, **context)
+    def fetch_daily_air_quality(period,parquet_chunk_path, **context):
+        file_name = extract_daily_air_quality(period, parquet_chunk_path, **context)
         return file_name
     
 
     @task(pool="noaa_power_extraction_pool")
-    def fetch_daily_land_surface(parquet_chunk_path, **context):
-        file_name = extract_daily_land_surface(parquet_chunk_path, **context)
+    def fetch_daily_land_surface(period, parquet_chunk_path, **context):
+        file_name = extract_daily_land_surface(period, parquet_chunk_path, **context)
         return file_name
 
     @task
@@ -153,9 +152,9 @@ with DAG(
 
 
     cities = get_cities()
-    fetch_climate = fetch_daily_climate.expand(parquet_chunk_path=cities)
-    fetch_air_quality = fetch_daily_air_quality.expand(parquet_chunk_path=cities)
-    fetch_land_surface = fetch_daily_land_surface.expand(parquet_chunk_path=cities)
+    fetch_climate = fetch_daily_climate.partial(period='daily').expand(parquet_chunk_path=cities)
+    fetch_air_quality = fetch_daily_air_quality.partial(period='daily').expand(parquet_chunk_path=cities)
+    fetch_land_surface = fetch_daily_land_surface.partial(period='daily').expand(parquet_chunk_path=cities)
 
     calc_daily_air_quality = aggregate_hourly_air_quality(fetch_air_quality)
     consolidating_climate_chunks = consolidate_daily_climate_chunks(fetch_climate)
