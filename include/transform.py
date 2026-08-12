@@ -57,6 +57,19 @@ def transform_daily_land_surface(parquet_paths, **context):
         consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
         consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
 
+        consolidated_df.rename(columns={
+        'PS': 'surface_pressure',
+        'TQV': 'total_precipitable_water',
+        'SLP': 'sea_level_pressure',
+        'TS': 'land_surface_temp',
+        'GWETROOT': 'root_zone_soil_wetness',
+        'ALLSKY_SFC_LW_DWN': 'surface_longwave_downward_irradiance',
+        'ALLSKY_SFC_SW_UP': 'surface_shortwave_upward_irradiance',
+        'ALLSKY_SFC_LW_UP': 'surface_longwave_upward_irradiance',
+        'TOA_SW_DWN': 'total_solar_irradiance',
+        'ALLSKY_SRF_ALB': 'all_sky_surface_albedo'
+        }, inplace=True)
+
         excl_cols = ['date', 'city_id']
         for col in consolidated_df.columns:
                 if col not in excl_cols:
