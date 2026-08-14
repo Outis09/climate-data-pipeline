@@ -10,9 +10,10 @@ from include.transform import transform_daily_climate_chunks, transform_daily_la
 with DAG(
     dag_id='backfill_climate',
     start_date=pendulum.datetime(2001, 1, 1, tz='UTC'),
-    end_date=pendulum.datetime(2025, 12, 31, tz='UTC'),
+    end_date=pendulum.datetime(2026, 1, 1, tz='UTC'),
     schedule=CronDataIntervalTimetable('@yearly', timezone='UTC'),
-    catchup=False
+    catchup=False,
+    max_active_runs=1
 ):
 
     start = EmptyOperator(task_id='start')
@@ -27,16 +28,19 @@ with DAG(
     @task
     def backfill_land_surface(period,parquet_paths, **context):
         save_path = extract_daily_land_surface(period, parquet_paths, **context)
+        return save_path
 
     @task
     def backfill_climate(period, parquet_paths, **context):
         save_path = extract_daily_climate(period, parquet_paths, **context)
+        return save_path
 
     @task
     def backfill_air_quality(period, parquet_paths, **context):
         save_path = extract_daily_air_quality(period, parquet_paths, **context)
+        return save_path
 
-        @task
+    @task
     def aggregate_hourly_air_quality(period, parquet_paths,**context):
         parquet_path = agg_hourly_air_quality(period, parquet_paths, **context)
         return parquet_path
@@ -52,6 +56,10 @@ with DAG(
         trnasformed_loc = transform_daily_land_surface(period, parquet_paths, **context)
         return trnasformed_loc
 
+    @task(pool="db_upsert_pool")
+    def upsert_data(parquet_paths, table_name):
+        load_data(parquet_paths, table_name)
+        return None
 
     end = EmptyOperator(task_id='end')
 
@@ -63,12 +71,22 @@ with DAG(
 
     transform_climate = consolidate_daily_climate_chunks(period='daily', parquet_paths=backfill_climate_yearly)
     transform_land_surface = consolidate_daily_land_surface(period='yearly', parquet_paths=backfill_land_surface_yearly)
-    transform_air_quality = backfill_air_quality_yearly
+    transform_air_quality = aggregate_hourly_air_quality(period='daily', parquet_paths=backfill_air_quality_yearly)
 
 
+    upsert_climate = upsert_data.override(task_id="upsert_climate")(
+        transform_climate, table_name='daily_climate'
+    )
+
+    upsert_air_quality = upsert_data.override(task_id="upsert_air_quality")(
+        transform_air_quality, table_name='daily_air_quality'
+    )
+
+    upsert_land_surface = upsert_data.override(task_id="upsert_land_surface")(
+        transform_land_surface, table_name='daily_land_surface'
+    )
 
     start >> cities
-    [backfill_air_quality_yearly, backfill_land_surface_yearly, backfill_climate_yearly] >> end
 
 
     
