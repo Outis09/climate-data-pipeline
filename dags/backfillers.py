@@ -6,6 +6,7 @@ from airflow.timetables.interval import CronDataIntervalTimetable
 from include.extract import extract_daily_land_surface, extract_daily_air_quality, extract_daily_climate
 from include.db import extract_cities, load_data
 from include.transform import transform_daily_climate_chunks, transform_daily_land_surface, agg_hourly_air_quality
+from include.custom.operators import QuotaAwareOpenMeteoExtractionOperator
 
 with DAG(
     dag_id='backfill_climate',
@@ -35,15 +36,13 @@ with DAG(
         save_path = extract_daily_climate(period, parquet_paths, **context)
         return save_path
 
-    @task
-    def backfill_air_quality(period, parquet_paths, **context):
-        save_path = extract_daily_air_quality(period, parquet_paths, **context)
-        return save_path
+    # extract_climate = QuotaAwareOpenMeteoExtractionOperator(
+    #     task_id="backfill_climate",
+    #     python_callable=extract_daily_climate,
+    #     op_kwargs={'period': 'yearly'},
+    #     retries=3
+    # )
 
-    @task
-    def aggregate_hourly_air_quality(period, parquet_paths,**context):
-        parquet_path = agg_hourly_air_quality(period, parquet_paths, **context)
-        return parquet_path
     
     @task
     def consolidate_daily_climate_chunks(period, parquet_paths, **context):
@@ -67,20 +66,15 @@ with DAG(
 
     backfill_climate_yearly = backfill_climate.partial(period='yearly').expand(parquet_paths=cities)
     backfill_land_surface_yearly =backfill_land_surface.partial(period='yearly').expand(parquet_paths=cities)
-    backfill_air_quality_yearly = backfill_air_quality.partial(period='yearly').expand(parquet_paths=cities)
 
     transform_climate = consolidate_daily_climate_chunks(period='daily', parquet_paths=backfill_climate_yearly)
     transform_land_surface = consolidate_daily_land_surface(period='yearly', parquet_paths=backfill_land_surface_yearly)
-    transform_air_quality = aggregate_hourly_air_quality(period='daily', parquet_paths=backfill_air_quality_yearly)
 
 
     upsert_climate = upsert_data.override(task_id="upsert_climate")(
         transform_climate, table_name='daily_climate'
     )
 
-    upsert_air_quality = upsert_data.override(task_id="upsert_air_quality")(
-        transform_air_quality, table_name='daily_air_quality'
-    )
 
     upsert_land_surface = upsert_data.override(task_id="upsert_land_surface")(
         transform_land_surface, table_name='daily_land_surface'
