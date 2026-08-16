@@ -31,17 +31,12 @@ with DAG(
         save_path = extract_daily_land_surface(period, parquet_paths, **context)
         return save_path
 
-    @task
-    def backfill_climate(period, parquet_paths, **context):
-        save_path = extract_daily_climate(period, parquet_paths, **context)
-        return save_path
+    # @task
+    # def backfill_climate(period, parquet_paths, **context):
+    #     save_path = extract_daily_climate(period, parquet_paths, **context)
+    #     return save_path
 
-    # extract_climate = QuotaAwareOpenMeteoExtractionOperator(
-    #     task_id="backfill_climate",
-    #     python_callable=extract_daily_climate,
-    #     op_kwargs={'period': 'yearly'},
-    #     retries=3
-    # )
+
 
     
     @task
@@ -64,10 +59,17 @@ with DAG(
 
     cities = get_cities()
 
-    backfill_climate_yearly = backfill_climate.partial(period='yearly').expand(parquet_paths=cities)
+    backfill_climate_yearly = QuotaAwareOpenMeteoExtractionOperator.partial(
+    task_id="backfill_climate",
+    python_callable=extract_daily_climate,
+    period = 'yearly',
+    retries=3
+    ).expand(parquet_paths=cities)
+
+    # backfill_climate_yearly = backfill_climate.partial(period='yearly').expand(parquet_paths=cities)
     backfill_land_surface_yearly =backfill_land_surface.partial(period='yearly').expand(parquet_paths=cities)
 
-    transform_climate = consolidate_daily_climate_chunks(period='daily', parquet_paths=backfill_climate_yearly)
+    transform_climate = consolidate_daily_climate_chunks(period='daily', parquet_paths=backfill_climate_yearly.output)
     transform_land_surface = consolidate_daily_land_surface(period='yearly', parquet_paths=backfill_land_surface_yearly)
 
 
@@ -80,7 +82,11 @@ with DAG(
         transform_land_surface, table_name='daily_land_surface'
     )
 
-    start >> cities
+    start >> cities >> [backfill_climate_yearly, backfill_land_surface_yearly]
+    backfill_land_surface_yearly >> transform_land_surface
+    backfill_climate_yearly >> transform_climate
+    transform_climate >> upsert_climate
+    transform_land_surface >> upsert_land_surface
 
 
     
