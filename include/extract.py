@@ -6,6 +6,7 @@ import requests_cache
 from retry_requests import retry
 from pathlib import Path
 from airflow.sdk.exceptions import AirflowException
+from include.helpers import get_data_path
 
 
 def extract_daily_climate(period, parquet_chunk_path, **context):     
@@ -19,21 +20,21 @@ def extract_daily_climate(period, parquet_chunk_path, **context):
         end_date = start_date 
         end_date_no_dash = start_date_no_dash
 
-        file_name = Path(f'/opt/airflow/include/data/raw/daily_climate/{start_date}/{chunk_id}.parquet')
+        file_name = get_data_path(f'raw/daily_climate/{start_date}/{chunk_id}.parquet')
         
     elif period == 'yearly':
-        start_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
+        start_date = context['data_interval_start'].date()
         start_date_no_dash = start_date.strftime('%Y%m%d')
-        end_date = datetime.strptime(context['data_interval_end'], '%Y-%m-%d').date()
+        end_date = context['data_interval_end'].date()
         end_date_no_dash = end_date.strftime('%Y%m%d')
 
-        file_name = Path(f'/opt/airflow/include/data/raw/annual-backfills/climate/{start_date.year}/{chunk_id}.parquet')
+        file_name = get_data_path(f"raw/annual-backfills/climate/{start_date.year}/{chunk_id}.parquet")
     else:
          raise ValueError(f'Invalid period: {period}. Expected "daily" or "yearly"')
 
-    file_name.parent.mkdir(parents=True, exist_ok=True)
+#    file_name.parent.mkdir(parents=True, exist_ok=True)
 
-    cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
+    cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
     retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
     openmeteo = openmeteo_requests.Client(session=retry_session)
 
@@ -140,22 +141,20 @@ def extract_daily_air_quality(period, parquet_chunk_path, **context):
         end_date = start_date 
         end_date_no_dash = start_date_no_dash
 
-        file_path = Path(f'/opt/airflow/include/data/raw/daily_climate/{start_date}/{chunk_id}.parquet')
+        file_path = get_data_path(f'raw/daily_air_quality/{start_date}/{chunk_id}.parquet')
         
     elif period == 'yearly':
-        start_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
+        start_date = context['data_interval_start'].date()
         start_date_no_dash = start_date.strftime('%Y%m%d')
-        end_date = datetime.strptime(context['data_interval_end'], '%Y-%m-%d').date()
+        end_date = context['data_interval_end'].date()
         end_date_no_dash = end_date.strftime('%Y%m%d')
 
-        file_path = Path(f'/opt/airflow/include/data/raw/annual-backfills/climate/{start_date.year}/{chunk_id}.parquet')
+        file_path = get_data_path(f'raw/annual-backfills/air_quality/{start_date.year}/{chunk_id}.parquet')
     else:
          raise ValueError(f'Invalid period: {period}. Expected "daily" or "yearly"')
 
-    file_path.parent.mkdir(parents=True, exist_ok=True)
 
-
-    cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
+    cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
     retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
     openmeteo = openmeteo_requests.Client(session=retry_session)
 
@@ -229,21 +228,20 @@ def extract_daily_land_surface(period, parquet_paths, **context):
         end_date = start_date 
         end_date_no_dash = start_date_no_dash
 
-        file_path = Path(f'/opt/airflow/include/data/raw/daily_land_surface/{start_date}/{chunk_id}.parquet')
+        file_path = get_data_path(f"raw/daily_land_surface/{start_date}/{chunk_id}.parquet")
         
     elif period == 'yearly':
-        start_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
+        start_date = context['data_interval_start'].date()
         start_date_no_dash = start_date.strftime('%Y%m%d')
-        end_date = datetime.strptime(context['data_interval_end'], '%Y-%m-%d').date()
+        end_date = context['data_interval_end'].date()
         end_date_no_dash = end_date.strftime('%Y%m%d')
 
-        file_path = Path(f'/opt/airflow/include/data/raw/annual-backfills/land_surface/{start_date.year}/{chunk_id}.parquet')
+        file_path = get_data_path(f"raw/annual-backfills/land_surface/{start_date.year}/{chunk_id}.parquet")
     else:
          raise ValueError(f'Invalid period: {period}. Expected "daily" or "yearly"')
 
-    file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
+    cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
     retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
 
     url = "https://power.larc.nasa.gov/api/temporal/daily/point"
