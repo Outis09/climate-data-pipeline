@@ -2,17 +2,19 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+from google.cloud import bigquery
+import os
 
 
 def extract_cities() -> list[str]:
-    chunk_storage_path = Path('//opt/airflow/include/staging/chunks/cities')
+    chunk_storage_path = Path('/opt/airflow/include/data/cities')
     if next(chunk_storage_path.glob("*.parquet"), None):
         return [str(chunk_path) for chunk_path in (chunk_storage_path.glob("*.parquet"))]
 
     hook = PostgresHook(postgres_conn_id='weather_db')
     sql_query = """SELECT city_id, lat, lng FROM cities"""
     df = hook.get_pandas_df(sql_query)
-    df = df.head(50)
+    df = df.head(100)
 
     # set number of rows for each chunk
     chunk_size = 50
@@ -24,13 +26,146 @@ def extract_cities() -> list[str]:
     for chunk in chunks:
         file_storage = chunk_storage_path.joinpath(f'cities{chunk_no}.parquet')
         chunk.to_parquet(path=file_storage, engine="pyarrow", compression="snappy", index=False)
-        chunk_paths.append(str(file_storage)) # converted to string because Path values are not serializable, so there may be xcom issues
+        chunk_paths.append(str(file_storage)) 
         chunk_no += 1
     return chunk_paths
 
-def load_data(parquet_paths, table_name):
-    dfs = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
-    upsert_df = pd.concat(dfs, ignore_index=True)
+
+
+main_table_config = {
+    "daily_climate": {
+        "keys": ["date", "city_id"],
+        "columns": [
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "temperature_2m_mean",
+            "cloud_cover_mean",
+            "relative_humidity_2m_max",
+            "relative_humidity_2m_min",
+            "relative_humidity_2m_mean",
+            "soil_moisture_0_to_10cm_mean",
+            "precipitation_sum",
+            "rain_sum",
+            "snowfall_sum",
+            "wind_speed_10m_mean",
+            "wind_speed_10m_max",
+            "pressure_msl_mean",
+            "shortwave_radiation_sum",
+            "river_discharge",
+        ],
+    },
+
+    "daily_air_quality": {
+        "keys": ["date", "city_id"],
+        "columns": [
+            "pm2_5_mean",
+            "pm10_mean",
+            "carbon_dioxide_mean",
+            "ozone_8h_max",
+            "carbon_monoxide_8h_max",
+            "nitrogen_dioxide_1h_max",
+            "sulphur_dioxide_1h_max",
+        ],
+    },
+
+    "daily_land_surface": {
+        "keys": ["date", "city_id"],
+        "columns": [
+            "surface_pressure",
+            "total_precipitable_water",
+            "sea_level_pressure",
+            "land_surface_temp",
+            "root_zone_soil_wetness",
+            "surface_longwave_downward_irradiance",
+            "surface_shortwave_upward_irradiance",
+            "surface_longwave_upward_irradiance",
+            "total_solar_irradiance",
+            "all_sky_surface_albedo",
+        ],
+    },
+}
+
+
+def bq_upsert_tables(parquet_path, table_name, context):
+    project_id = os.getenv("PROJECT_ID")
+    dataset = os.getenv("BQ_DATASET_NAME")
+
+    config = main_table_config[table_name]
+
+    keys = config["keys"]
+    columns = config["columns"]
+
+    target_table = f"{project_id}.{dataset}.{table_name}"
+    staging_table = f"{project_id}.{dataset}.{table_name}_{context['run_id']}_staging"
+
+    df = pd.read_parquet(parquet_path)
+
+    bq_client = bigquery.Client(project=project_id)
+
+    job_config = bigquery.LoadJobConfig(
+        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE
+    )
+
+    load_job = bq_client.load_table_from_dataframe(
+        df,
+        staging_table,
+        job_config=job_config,
+    )
+    load_job.result()
+
+
+    merge_condition = "\nAND ".join(
+        f"target.{key} = source.{key}"
+        for key in keys
+    )
+
+    update_clause = ",\n    ".join(
+        f"{column} = source.{column}"
+        for column in columns
+    )
+
+    insert_columns = keys + columns + ["created_at"]
+
+    insert_column_clause = ",\n    ".join(insert_columns)
+
+    insert_values = (
+        [f"source.{column}" for column in keys + columns]
+        + ["CURRENT_TIMESTAMP()"]
+    )
+
+    insert_value_clause = ",\n    ".join(insert_values)
+
+    merge_query = f"""
+        MERGE `{target_table}` AS target
+        USING `{staging_table}` AS source
+
+        ON {merge_condition}
+
+        WHEN MATCHED THEN
+          UPDATE SET
+            {update_clause}
+
+        WHEN NOT MATCHED THEN
+          INSERT (
+            {insert_column_clause}
+          )
+          VALUES (
+            {insert_value_clause}
+          )
+    """
+
+    try:
+        merge_job = bq_client.query(merge_query)
+        merge_job.result()
+
+    finally:
+        bq_client.delete_table(
+            staging_table,
+            not_found_ok=True
+        )
+
+def upsert_postgres(parquet_path, table_name):
+    upsert_df = pd.read_parquet(parquet_path, engine='pyarrow')
     upsert_df.replace({np.nan: None}, inplace=True)
 
     hook = PostgresHook(postgres_conn_id='weather_db')
@@ -44,3 +179,11 @@ def load_data(parquet_paths, table_name):
         target_fields=upsert_df.columns.to_list(),
         conflict_fields=['city_id', 'date']
     )
+
+def load_data(parquet_path, table_name, **context):
+    storage_type = os.getenv('STORAGE_BACKEND')
+
+    if storage_type == 'local':
+        upsert_postgres(parquet_path, table_name)
+    if storage_type == 'gcs':
+        bq_upsert_tables(parquet_path, table_name, context)
