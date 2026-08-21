@@ -36,6 +36,13 @@ resource "google_project_iam_member" "climate_pipeline_service_account" {
   role     = "roles/composer.worker"
 }
 
+resource "google_project_iam_member" "composer_bigquery_read_session" {
+  project = var.project_id
+  role    = "roles/bigquery.readSessionUser"
+
+  member = "serviceAccount:${google_service_account.climate_pipeline_service_account.email}"
+}
+
 
 resource "google_bigquery_dataset" "climate_data" {
   provider = google-beta
@@ -164,12 +171,15 @@ resource "google_composer_environment" "climate_data_environment" {
       retry-requests = ">=2.0.0"
       openmeteo-requests = ">=1.7.5"
       great-expectations = ">=1.19.1"
+      cloudpathlib = ">=0.24.0"
 
     }
 
     env_variables = {
       BUCKET_NAME = var.bucket_name
       BQ_DATASET_NAME = var.bigquery_dataset_name
+      STORAGE_BACKEND = "gcs"
+      CLIMATE_COUNTRY = var.climate_country
     }
     }
 
