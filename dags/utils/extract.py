@@ -6,11 +6,16 @@ import requests_cache
 from retry_requests import retry
 from pathlib import Path
 from airflow.sdk.exceptions import AirflowException
-from include.helpers import get_data_path
-
+from utils.helpers import get_data_path
+import os
+from cloudpathlib import GSPath
 
 def extract_daily_climate(period, parquet_chunk_path, **context):     
-    parquet_chunk_path = Path(parquet_chunk_path)
+    storage_type = os.getenv('STORAGE_BACKEND')
+    if storage_type == 'local':
+        parquet_chunk_path = Path(parquet_chunk_path)
+    else:
+        parquet_chunk_path = GSPath(parquet_chunk_path)
     chunk_id = parquet_chunk_path.stem
      
     if period == 'daily':         
@@ -131,7 +136,11 @@ def extract_daily_climate(period, parquet_chunk_path, **context):
 
 
 def extract_daily_air_quality(period, parquet_chunk_path, **context):
-    parquet_chunk_path = Path(parquet_chunk_path)
+    storage_type = os.getenv('STORAGE_BACKEND')
+    if storage_type == 'local':
+        parquet_chunk_path = Path(parquet_chunk_path)
+    else:
+            parquet_chunk_path = GSPath(parquet_chunk_path)
     chunk_id = parquet_chunk_path.stem
      
     if period == 'daily':         
@@ -217,7 +226,11 @@ def extract_daily_air_quality(period, parquet_chunk_path, **context):
 
 
 def extract_daily_land_surface(period, parquet_paths, **context):
-    parquet_chunk_path = Path(parquet_paths)
+    storage_type = os.getenv('STORAGE_BACKEND')
+    if storage_type == 'local':
+        parquet_chunk_path = Path(parquet_paths)
+    else:
+            parquet_chunk_path = GSPath(parquet_paths)
     chunk_id = parquet_chunk_path.stem
 
 
