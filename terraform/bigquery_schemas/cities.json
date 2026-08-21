@@ -1,0 +1,57 @@
+[
+  {
+    "name": "city_id",
+    "type": "INTEGER",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "city",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "city_ascii",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "lat",
+    "type": "NUMERIC",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "lng",
+    "type": "NUMERIC",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "country",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "iso2",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "iso3",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "admin_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "capital",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "population",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  }
+]
