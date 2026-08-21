@@ -3,10 +3,22 @@ import numpy as np
 import pandas as pd
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from google.cloud import bigquery
+from google.cloud import storage
 import os
+from utils.helpers import get_data_path
 
 
 def extract_cities() -> list[str]:
+    storage_type = os.getenv('STORAGE_BACKEND')
+    country = os.getenv('CLIMATE_COUNTRY')
+    if storage_type == 'local':
+        paths = extract_cities_postgres()
+    elif storage_type == 'gcs':
+        paths = extract_cities_bigquery(country)
+    return paths
+
+
+def extract_cities_postgres():
     chunk_storage_path = Path('/opt/airflow/include/data/cities')
     if next(chunk_storage_path.glob("*.parquet"), None):
         return [str(chunk_path) for chunk_path in (chunk_storage_path.glob("*.parquet"))]
@@ -29,6 +41,48 @@ def extract_cities() -> list[str]:
         chunk_paths.append(str(file_storage)) 
         chunk_no += 1
     return chunk_paths
+
+def extract_cities_bigquery(country):
+    gcs_client = storage.Client()
+    dataset = os.getenv('BQ_DATASET_NAME')
+    # project = os.getenv('PROJECT_ID')
+    bucket = os.getenv('BUCKET_NAME')
+    bucket = gcs_client.bucket(bucket)
+
+    blobs = list(gcs_client.list_blobs(bucket, prefix='data/cities_chunks/'))
+    chunk_paths = [blob.name for blob in blobs if blob.name.endswith('.parquet')]
+    if chunk_paths:
+        return chunk_paths
+
+    bq_client = bigquery.Client()
+
+    query = f"""
+    SELECT city_id, lat, lng
+    FROM `{dataset}.cities`
+    WHERE country = @country
+    ORDER BY population desc
+    LIMIT 100;
+"""
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters = [bigquery.ScalarQueryParameter("country", "STRING", country)]
+    )
+    df = bq_client.query(query,job_config=job_config).to_dataframe()
+
+    chunk_size = 50
+    chunks = [df.iloc[i : i + chunk_size] for i in range(0,len(df), chunk_size)]
+    chunk_paths = []
+    chunk_no = 0
+    for chunk in chunks:
+        file_storage = get_data_path(f'data/cities_chunks/cities{chunk_no}.parquet')
+        chunk.to_parquet(file_storage)
+        chunk_paths.append(str(file_storage))
+        chunk_no += 1
+    return chunk_paths
+
+
+
+    
 
 
 
