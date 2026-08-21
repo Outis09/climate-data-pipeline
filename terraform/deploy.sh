@@ -27,6 +27,51 @@ echo "Terraform deployment completed successfully." | tee -a "$LOG_FILE"
 
 echo "Uploading dags..." | tee -a "$LOG_FILE"
 DAG_GCS_PREFIX=$(terraform output -raw dag_gcs_prefix)
-if gcloud storage rsync ./dags/ "$DAG_GCS_PREFIX" --quiet 2>&1 | tee -a "$LOG_FILE"; then
+if gcloud storage rsync -r --exclude=".*__pycache__.*" ../dags/ "$DAG_GCS_PREFIX" --quiet 2>&1 | tee -a "$LOG_FILE"; then
     echo "DAGs uploaded successfully to $DAG_GCS_PREFIX." | tee -a "$LOG_FILE"
 fi
+
+echo "Configuring pools for Composer Environment..." | tee -a "$LOG_FILE"
+COMPOSER_ENVIRONMENT_NAME=$(terraform output -raw composer_environment_name)
+LOCATION=$(terraform output -raw region)
+PROJECT_ID=$(terraform output -raw project_id)
+
+
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" pools set -- --include-deferred noaa_power_extraction_pool 4 "Pool for NOAA Power Extraction Tasks"  2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error configuring NOAA Power Extraction Pool for Composer Environment. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" pools set -- --include-deferred open_meteo_extraction_pool 4 "Pool for Open Meteo Extraction Tasks"  2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error configuring Open Meteo Extraction Pool for Composer Environment. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" pools set -- --include-deferred db_upsert_pool 4 "Pool for DB Upsert Tasks"  2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error configuring DB Upsert Pool for Composer Environment. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+echo "Preparing cities data for upload..." | tee -a "$LOG_FILE"
+python3 ./clean_cities.py || python ./clean_cities.py
+
+echo "Uploading cities data to GCS bucket..." | tee -a "$LOG_FILE"
+CITIES_GCS_PREFIX=$(terraform output -raw custom_gcs_prefix)
+if ! gcloud storage cp \
+    ../worldcities_clean.csv \
+    "$CITIES_GCS_PREFIX/worldcities_clean.csv" \
+    2>&1 | tee -a "$LOG_FILE"; then
+
+    echo "Error uploading cities data to GCS." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+echo "Cities data uploaded successfully." | tee -a "$LOG_FILE"
+
+echo "Uploading cities data to BigQuery..." | tee -a "$LOG_FILE"
+
+if ! bq --project_id="$PROJECT_ID" load --source_format=CSV  --skip_leading_rows=1 --replace "$(terraform output -raw cities_table_id)" "$CITIES_GCS_PREFIX/worldcities_clean.csv" 2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error uploading cities data to BigQuery." | tee -a "$LOG_FILE"
+    exit 1
+fi
+echo "Cities data uploaded successfully to BigQuery." | tee -a "$LOG_FILE"
