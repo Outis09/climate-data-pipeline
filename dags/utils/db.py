@@ -50,7 +50,7 @@ def extract_cities_bigquery(country):
     bucket = gcs_client.bucket(bucket)
 
     blobs = list(gcs_client.list_blobs(bucket, prefix='data/cities_chunks/'))
-    chunk_paths = [blob.name for blob in blobs if blob.name.endswith('.parquet')]
+    chunk_paths = [get_data_path(blob.name) for blob in blobs if blob.name.endswith('.parquet')]
     if chunk_paths:
         return chunk_paths
 
