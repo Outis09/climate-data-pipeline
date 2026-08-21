@@ -52,6 +52,16 @@ resource "google_bigquery_table" "climate_data_table" {
   project    = var.project_id
 
   schema = file("${path.module}/bigquery_schemas/daily_climate.json")
+
+  time_partitioning {
+    type = "DAY"
+    field = "date"
+  }
+
+  clustering = ["city_id"]
+
+  deletion_protection = false
+  
 }
 
 resource "google_bigquery_table" "air_quality_data_table" {
@@ -61,6 +71,15 @@ resource "google_bigquery_table" "air_quality_data_table" {
   project    = var.project_id
 
   schema = file("${path.module}/bigquery_schemas/daily_air_quality.json")
+
+  time_partitioning {
+    type = "DAY"
+    field = "date"
+  }
+
+  clustering = ["city_id"]
+
+  deletion_protection = false
 }
 
 resource "google_bigquery_table" "land_surface_data_table" {
@@ -70,7 +89,17 @@ resource "google_bigquery_table" "land_surface_data_table" {
   project    = var.project_id
 
   schema = file("${path.module}/bigquery_schemas/daily_land_surface.json")
+
+    time_partitioning {
+        type = "DAY"
+        field = "date"
+    }
+
+    clustering = ["city_id"]
+
+    deletion_protection = false
 }
+
 
 
 resource "google_project_iam_member" "climate_pipeline_account_bq_job_user" {
