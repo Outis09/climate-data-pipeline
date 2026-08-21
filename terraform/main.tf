@@ -45,6 +45,17 @@ resource "google_bigquery_dataset" "climate_data" {
   delete_contents_on_destroy = true
 }
 
+resource "google_bigquery_table" "cities_table" {
+  provider = google-beta
+  dataset_id = google_bigquery_dataset.climate_data.dataset_id
+  table_id   = "cities"
+  project    = var.project_id
+
+  schema = file("${path.module}/bigquery_schemas/cities.json")
+
+  deletion_protection = false
+}
+
 resource "google_bigquery_table" "climate_data_table" {
   provider = google-beta
   dataset_id = google_bigquery_dataset.climate_data.dataset_id
