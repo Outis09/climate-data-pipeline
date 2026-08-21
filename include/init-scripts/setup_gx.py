@@ -1,5 +1,7 @@
 import great_expectations as gx
 from pathlib import Path
+import os
+from cloudpathlib import GSPath
 
 
 def create_daily_climate_pre_load_suite(context):
@@ -159,28 +161,56 @@ def create_daily_land_surface_pre_load_suite(context):
     
 
 
-def configure_checkpoint(context, api_source):
-
+def configure_checkpoint(context, api_source, storage_type, gcs_bucket=None):
     expectation_suite = context.suites.get(name=f"pre_load_{api_source}")
 
-    data_source = context.data_sources.add_or_update_pandas_filesystem(
-        name=f"{api_source} parquet file",
-        base_directory=Path(f'/opt/airflow/include/data/transformed/daily_{api_source}')
-    )
+    if storage_type == 'local':
+        base_directory = Path(f'/opt/airflow/include/data/transformed/daily_{api_source}')
 
-    parquet_asset = data_source.add_parquet_asset(
-        name=f"{api_source}_raw_parquet"
-    )
-
-    batch_definition = parquet_asset.add_batch_definition_daily(
-        name=f"daily_{api_source}_batch",
-        regex=(
-            r"(?P<year>\d{4})-"
-            r"(?P<month>\d{2})-"
-            r"(?P<day>\d{2})"
-            r"\.parquet"
+        data_source = context.data_sources.add_or_update_pandas_filesystem(
+            name=f"{api_source} parquet file",
+            base_directory=base_directory
         )
-    )
+
+        parquet_asset = data_source.add_parquet_asset(
+            name=f"{api_source}_raw_parquet"
+        )
+    else:
+        # base_directory = Path(f'{gcs_bucket}/transformed/daily_{api_source}')
+        # existing_sources = [ds.name for ds in context.data_sources.all()]
+        # if f"{api_source} parquet file" in existing_sources:
+        #     context.data_sources.delete(f"{api_source} parquet file")
+        try:
+            data_source = context.data_sources.get(f'{api_source} parquet file')
+            # context.data_sources.delete(f"{api_source} parquet file")
+        except LookupError as e:
+            data_source = context.data_sources.add_pandas_gcs(
+                name=f'{api_source} parquet file',
+                bucket_or_name=gcs_bucket,
+                gcs_options={}
+            )
+
+        try:
+            parquet_asset = data_source.get_asset(f"{api_source}_raw_parquet")
+        except LookupError as e:
+            parquet_asset = data_source.add_parquet_asset(
+                name=f"{api_source}_raw_parquet",
+                gcs_prefix=f'transformed/daily_{api_source}',
+                gcs_recursive_file_discovery=True
+            )
+
+        try:
+            batch_definition = parquet_asset.get_batch_definition(f"daily_{api_source}_batch")
+        except LookupError:
+            batch_definition = parquet_asset.add_batch_definition_daily(
+                name=f"daily_{api_source}_batch",
+                regex=(
+                    r"(?P<year>\d{4})-"
+                    r"(?P<month>\d{2})-"
+                    r"(?P<day>\d{2})"
+                    r"\.parquet"
+                )
+            )
 
     validation_definition = context.validation_definitions.add_or_update(
         gx.ValidationDefinition(
@@ -199,11 +229,16 @@ def configure_checkpoint(context, api_source):
     return context.checkpoints.add_or_update(checkpoint)
 
 if __name__ == '__main__':
-    include_root = Path('/opt/airflow/include')
+    storage_option = os.getenv('STORAGE_BACKEND')
+    bucket = os.getenv('BUCKET_NAME')
+    if storage_option == 'local':
+        root = Path('/opt/airflow/include/gx')
+    else:
+        root = "/home/airflow/gcs/data/gx"
 
-    GX_ROOT = include_root / "gx"
+    # GX_ROOT = root / "gx"
 
-    context = gx.get_context(project_root_dir=GX_ROOT)
+    context = gx.get_context(mode='file', project_root_dir=root)
 
     create_daily_climate_pre_load_suite(context)
 
@@ -213,4 +248,4 @@ if __name__ == '__main__':
 
     sources = ['climate', 'air_quality', 'land_surface']
     for source in sources:
-        configure_checkpoint(context, source)
+        configure_checkpoint(context, source, storage_type=storage_option, gcs_bucket=bucket)
