@@ -6,6 +6,7 @@ from google.cloud import bigquery
 from google.cloud import storage
 import os
 from utils.helpers import get_data_path
+import re
 
 
 def extract_cities() -> list[str]:
@@ -140,8 +141,8 @@ main_table_config = {
 }
 
 
-def bq_upsert_tables(parquet_path, table_name, context):
-    project_id = os.getenv("PROJECT_ID")
+def bq_upsert_tables(parquet_path, table_name, run_id):
+    run_id = re.sub(r'[^a-zA-Z0-9_]', '_', str(run_id))
     dataset = os.getenv("BQ_DATASET_NAME")
 
     config = main_table_config[table_name]
@@ -149,15 +150,18 @@ def bq_upsert_tables(parquet_path, table_name, context):
     keys = config["keys"]
     columns = config["columns"]
 
-    target_table = f"{project_id}.{dataset}.{table_name}"
-    staging_table = f"{project_id}.{dataset}.{table_name}_{context['run_id']}_staging"
+    target_table = f"{dataset}.{table_name}"
+    staging_table = f"{dataset}.{table_name}_{run_id}_staging"
 
     df = pd.read_parquet(parquet_path)
 
-    bq_client = bigquery.Client(project=project_id)
+    bq_client = bigquery.Client()
+
+    target_schema = bq_client.get_table(target_table).schema
 
     job_config = bigquery.LoadJobConfig(
-        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE
+        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+        schema=target_schema
     )
 
     load_job = bq_client.load_table_from_dataframe(
@@ -240,4 +244,4 @@ def load_data(parquet_path, table_name, **context):
     if storage_type == 'local':
         upsert_postgres(parquet_path, table_name)
     if storage_type == 'gcs':
-        bq_upsert_tables(parquet_path, table_name, context)
+        bq_upsert_tables(parquet_path, table_name, run_id=context['run_id'])
