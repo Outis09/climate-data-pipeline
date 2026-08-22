@@ -19,8 +19,7 @@ def extract_daily_climate(period, parquet_chunk_path, **context):
     chunk_id = parquet_chunk_path.stem
      
     if period == 'daily':         
-        start_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
-        start_date = start_date - timedelta(days=1)
+        start_date = context['data_interval_start'].date()
         start_date_no_dash = start_date.strftime('%Y%m%d')
         end_date = start_date 
         end_date_no_dash = start_date_no_dash
@@ -144,8 +143,7 @@ def extract_daily_air_quality(period, parquet_chunk_path, **context):
     chunk_id = parquet_chunk_path.stem
      
     if period == 'daily':         
-        start_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
-        start_date = start_date - timedelta(days=1)
+        start_date = context['data_interval_start'].date()
         start_date_no_dash = start_date.strftime('%Y%m%d')
         end_date = start_date 
         end_date_no_dash = start_date_no_dash
@@ -235,7 +233,7 @@ def extract_daily_land_surface(period, parquet_paths, **context):
 
 
     if period == 'daily':         
-        start_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
+        start_date = context['data_interval_start'].date()
         start_date = start_date - timedelta(days=1)
         start_date_no_dash = start_date.strftime('%Y%m%d')
         end_date = start_date 

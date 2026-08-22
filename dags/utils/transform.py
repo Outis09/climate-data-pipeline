@@ -38,11 +38,11 @@ def agg_hourly_air_quality(period, parquet_paths,**context):
     daily_air_quality.rename(columns={'day':'date'}, inplace=True)
 
     if period == 'daily':
-        logical_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
+        logical_date = context['data_interval_start'].date()
         # parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_air_quality/{logical_date}.parquet')
         parquet_path = get_data_path(f'transformed/daily_air_quality/{logical_date}.parquet')
     elif period == 'yearly':
-        start_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
+        start_date = context['data_interval_start'].date()
         parquet_path = Path(f'/opt/airflow/include/data/transformed/annual_backfills/air_quality/{start_date.year}.parquet')
         parquet_path = get_data_path(f"transformed/annual_backfills/air_quality/{start_date.year}.parquet")
     else:
@@ -59,11 +59,11 @@ def transform_daily_climate_chunks(period, parquet_paths, **context):
     consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
 
     if period == 'daily':
-        logical_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
+        logical_date = context['data_interval_start'].date()
         # parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_climate/{logical_date}.parquet')
         parquet_path = get_data_path(f"transformed/daily_climate/{logical_date}.parquet")
     elif period == 'yearly':
-        start_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
+        start_date = context['data_interval_start'].date()
         # parquet_path = Path(f'/opt/airflow/include/data/transformed/annual_backfills/climate/{start_date.year}.parquet')
         parquet_path = get_data_path(f"transformed/annual_backfills/climate/{start_date.year}.parquet")
     else:
@@ -98,7 +98,7 @@ def transform_daily_land_surface(period, parquet_paths, **context):
                     consolidated_df[col] = consolidated_df[col].replace(-999, None)
 
     if period == 'daily':
-            logical_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
+            logical_date = context['data_interval_start'].date()
             logical_date = logical_date - timedelta(days=1)
             # parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_land_surface/{logical_date}.parquet')
             parquet_path = get_data_path(f"transformed/daily_land_surface/{logical_date}.parquet")
