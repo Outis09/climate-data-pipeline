@@ -1,7 +1,7 @@
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
-from include.helpers import get_data_path
+from utils.helpers import get_data_path
 
 def agg_hourly_air_quality(period, parquet_paths,**context):
     dfs = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
@@ -38,7 +38,7 @@ def agg_hourly_air_quality(period, parquet_paths,**context):
     daily_air_quality.rename(columns={'day':'date'}, inplace=True)
 
     if period == 'daily':
-        logical_date = datetime.strptime(context['ds'], '%Y-%m-%d').date()
+        logical_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
         # parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_air_quality/{logical_date}.parquet')
         parquet_path = get_data_path(f'transformed/daily_air_quality/{logical_date}.parquet')
     elif period == 'yearly':
@@ -59,7 +59,7 @@ def transform_daily_climate_chunks(period, parquet_paths, **context):
     consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
 
     if period == 'daily':
-        logical_date = datetime.strptime(context['ds'], '%Y-%m-%d').date()
+        logical_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
         # parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_climate/{logical_date}.parquet')
         parquet_path = get_data_path(f"transformed/daily_climate/{logical_date}.parquet")
     elif period == 'yearly':
@@ -98,7 +98,7 @@ def transform_daily_land_surface(period, parquet_paths, **context):
                     consolidated_df[col] = consolidated_df[col].replace(-999, None)
 
     if period == 'daily':
-            logical_date = datetime.strptime(context['ds'], '%Y-%m-%d').date()
+            logical_date = datetime.strptime(context['data_interval_start'], '%Y-%m-%d').date()
             logical_date = logical_date - timedelta(days=1)
             # parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_land_surface/{logical_date}.parquet')
             parquet_path = get_data_path(f"transformed/daily_land_surface/{logical_date}.parquet")
