@@ -7,6 +7,8 @@ from google.cloud import storage
 import os
 from utils.helpers import get_data_path
 import re
+from decimal import Decimal, ROUND_HALF_UP
+
 
 
 def extract_cities() -> list[str]:
@@ -140,6 +142,8 @@ main_table_config = {
     },
 }
 
+def to_decimal(value):
+    return None if pd.isna(value) else Decimal(str(float(value))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 def bq_upsert_tables(parquet_path, table_name, run_id):
     run_id = re.sub(r'[^a-zA-Z0-9_]', '_', str(run_id))
@@ -154,16 +158,29 @@ def bq_upsert_tables(parquet_path, table_name, run_id):
     staging_table = f"{dataset}.{table_name}_{run_id}_staging"
 
     df = pd.read_parquet(parquet_path)
+    df['date'] = pd.to_datetime(df['date']).dt.date
 
     bq_client = bigquery.Client()
 
     target_schema = bq_client.get_table(target_table).schema
+    staging_schema = [
+        field
+        for field in target_schema
+        if field.name in set(keys + columns)
+    ]
+
+
+    for field in staging_schema:
+        if field.name not in df.columns:
+            continue
+        if field.field_type in ("NUMERIC", 'BIGNUMERIC'):
+            df[field.name] = df[field.name].map(to_decimal)
 
     job_config = bigquery.LoadJobConfig(
-        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
-        schema=target_schema
+    write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+    schema=staging_schema
     )
-
+        
     load_job = bq_client.load_table_from_dataframe(
         df,
         staging_table,
