@@ -15,19 +15,24 @@ def extract_cities() -> list[str]:
     storage_type = os.getenv('STORAGE_BACKEND')
     country = os.getenv('CLIMATE_COUNTRY')
     if storage_type == 'local':
-        paths = extract_cities_postgres()
+        paths = extract_cities_postgres(country)
     elif storage_type == 'gcs':
         paths = extract_cities_bigquery(country)
     return paths
 
 
-def extract_cities_postgres():
+def extract_cities_postgres(country):
     chunk_storage_path = Path('/opt/airflow/include/data/cities')
     if next(chunk_storage_path.glob("*.parquet"), None):
         return [str(chunk_path) for chunk_path in (chunk_storage_path.glob("*.parquet"))]
 
     hook = PostgresHook(postgres_conn_id='weather_db')
-    sql_query = """SELECT city_id, lat, lng FROM cities"""
+    sql_query = f"""SELECT city_id, lat, lng 
+                    FROM cities 
+                    WHERE country = '{country}'
+                    ORDER BY population DESC
+                    LIMIT 100;
+                """
     df = hook.get_pandas_df(sql_query)
     df = df.head(100)
 
@@ -157,7 +162,8 @@ def bq_upsert_tables(parquet_path, table_name, run_id):
     target_table = f"{dataset}.{table_name}"
     staging_table = f"{dataset}.{table_name}_{run_id}_staging"
 
-    df = pd.read_parquet(parquet_path)
+    df_list = [pd.read_parquet(parquet_path) for path in parquet_path]
+    df = pd.concat(df_list, ignore_index=True)
     df['date'] = pd.to_datetime(df['date']).dt.date
 
     bq_client = bigquery.Client()
@@ -240,18 +246,20 @@ def bq_upsert_tables(parquet_path, table_name, run_id):
         )
 
 def upsert_postgres(parquet_path, table_name):
-    upsert_df = pd.read_parquet(parquet_path, engine='pyarrow')
-    upsert_df.replace({np.nan: None}, inplace=True)
+    df_list = [pd.read_parquet(parquet_path) for path in parquet_path]
+    df = pd.concat(df_list, ignore_index=True)
+    df['date'] = pd.to_datetime(df['date']).dt.date
+    # upsert_df.replace({np.nan: None}, inplace=True)
 
     hook = PostgresHook(postgres_conn_id='weather_db')
 
     # table_name = "daily_climate"
-    rows = list(upsert_df.itertuples(index=False, name=None))
+    rows = list(df.itertuples(index=False, name=None))
 
     hook.upsert_rows(
         table=table_name,
         rows=rows,
-        target_fields=upsert_df.columns.to_list(),
+        target_fields=df.columns.to_list(),
         conflict_fields=['city_id', 'date']
     )
 

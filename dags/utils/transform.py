@@ -37,44 +37,25 @@ def agg_hourly_air_quality(period, parquet_paths,**context):
 
     daily_air_quality.rename(columns={'day':'date'}, inplace=True)
 
-    if period == 'daily':
-        logical_date = context['data_interval_start'].date()
-        # parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_air_quality/{logical_date}.parquet')
-        parquet_path = get_data_path(f'transformed/daily_air_quality/{logical_date}.parquet')
-    elif period == 'yearly':
-        start_date = context['data_interval_start'].date()
-        parquet_path = Path(f'/opt/airflow/include/data/transformed/annual_backfills/air_quality/{start_date.year}.parquet')
-        parquet_path = get_data_path(f"transformed/annual_backfills/air_quality/{start_date.year}.parquet")
-    else:
-        raise ValueError(f'Invalid period: {period}. Expected "daily" or "yearly"')
-
+    logical_date = context['data_interval_start'].date()
+    parquet_path = get_data_path(f'transformed/daily_air_quality/{logical_date.year}/{logical_date.month:02d}/{logical_date.day:02d}.parquet')
     daily_air_quality.to_parquet(parquet_path, engine='pyarrow', compression='snappy', index=False)
 
     return str(parquet_path)
 
-def transform_daily_climate_chunks(period, parquet_paths, **context):
-
-
+def transform_daily_climate_chunks(parquet_paths):
     consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
     consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
 
-    if period == 'daily':
-        logical_date = context['data_interval_start'].date()
-        # parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_climate/{logical_date}.parquet')
-        parquet_path = get_data_path(f"transformed/daily_climate/{logical_date}.parquet")
-    elif period == 'yearly':
-        start_date = context['data_interval_start'].date()
-        # parquet_path = Path(f'/opt/airflow/include/data/transformed/annual_backfills/climate/{start_date.year}.parquet')
-        parquet_path = get_data_path(f"transformed/annual_backfills/climate/{start_date.year}.parquet")
-    else:
-        raise ValueError(f'Invalid period: {period}. Expected "daily" or "yearly"')
+    file_paths = []
+    for logical_date, data in consolidated_df.groupby('date'):
+        # logical_date = consolidated_df['date'].iloc[0]
+        parquet_path = get_data_path(f"transformed/daily_climate/{logical_date.year}/{logical_date.month:02d}/{logical_date.day:02d}.parquet")
+        data.to_parquet(parquet_path, engine='pyarrow', compression='snappy', index=False)
+        file_paths.append(str(parquet_path))
+    return file_paths
 
-    consolidated_df.to_parquet(parquet_path, engine='pyarrow', compression='snappy', index=False)
-    return str(parquet_path)
-
-def transform_daily_land_surface(period, parquet_paths, **context):    
-    
-
+def transform_daily_land_surface(parquet_paths):
     consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
     consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
 
@@ -97,17 +78,9 @@ def transform_daily_land_surface(period, parquet_paths, **context):
             if col not in excl_cols:
                     consolidated_df[col] = consolidated_df[col].replace(-999, None)
 
-    if period == 'daily':
-            logical_date = context['data_interval_start'].date()
-            logical_date = logical_date - timedelta(days=1)
-            # parquet_path = Path(f'/opt/airflow/include/data/transformed/daily_land_surface/{logical_date}.parquet')
-            parquet_path = get_data_path(f"transformed/daily_land_surface/{logical_date}.parquet")
-    elif period == 'yearly':
-        start_date = datetime.strftime(context['data_interval_start'], '%Y-%m-%d')#.date()
-        # parquet_path = Path(f'/opt/airflow/include/data/transformed/annual_backfills/land_surface/{start_date[:4]}.parquet')
-        parquet_path = get_data_path(f"transformed/annual_backfills/land_surface/{start_date[:4]}.parquet")
-    else:
-        raise ValueError(f'Invalid period: {period}. Expected "daily" or "yearly"')
-    
-    consolidated_df.to_parquet(parquet_path, engine='pyarrow', index=False)
-    return str(parquet_path)
+    file_paths = []
+    for logical_date, data in consolidated_df.groupby('date'):
+        parquet_path = get_data_path(f"transformed/ daily_land_surface/{logical_date.year}/{logical_date.month:02d}/{logical_date.day:02d}.parquet")
+        data.to_parquet(parquet_path, engine='pyarrow', compression='snappy', index=False)
+        file_paths.append(str(parquet_path))
+    return file_paths
