@@ -246,7 +246,7 @@ def bq_upsert_tables(parquet_path, table_name, run_id):
         )
 
 def upsert_postgres(parquet_path, table_name):
-    df_list = [pd.read_parquet(parquet_path) for path in parquet_path]
+    df_list = [pd.read_parquet(path) for path in parquet_path]
     df = pd.concat(df_list, ignore_index=True)
     df['date'] = pd.to_datetime(df['date']).dt.date
     # upsert_df.replace({np.nan: None}, inplace=True)
