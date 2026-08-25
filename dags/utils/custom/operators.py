@@ -28,10 +28,10 @@ class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
                     reason = str(error).lower()
 
                 if "minutely api request limit exceeded" in reason:
-                    self.log.warning("Minutely API quota exhausted. Deferring task for 1 day.")
+                    self.log.warning("Minutely API quota exhausted. Deferring task for 1 minute.")
                     delay = timedelta(minutes=1)
                 elif "hourly api request limit exceeded" in reason:
-                    self.log.warning(f"Hourly API quota exhausted. Deferring task for 1 day.")
+                    self.log.warning(f"Hourly API quota exhausted. Deferring task for 1 hour.")
                     delay = timedelta(hours=1)
                     
                 elif 'daily api request limit exceeded' in reason:
@@ -41,15 +41,18 @@ class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
                     self.log.warning(f"Daily API quota exhausted. Deferring task for {delay} hours.")
                     # delay = timedelta(days=1)
 
+                else:
+                    raise AirflowException(error)
+
                 self.defer(
                 trigger=TimeDeltaTrigger(delay),
                 method_name='execute',
                 kwargs={
-                    "current_path_index": current_path_index,
+                    "current_path_index": i,
                     "completed_paths": completed_paths
                 }
                 )
-                raise AirflowException(error)
+                 
         self.log.info("Returned value: %s", completed_paths)
         return  completed_paths
 
