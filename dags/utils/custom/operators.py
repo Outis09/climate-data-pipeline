@@ -6,6 +6,8 @@ from airflow.sdk.exceptions import AirflowException
 
 class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
     """A custom operator, built using the BaseOperator, that defers an Open Meteo extraction task for 24 hours when the daily API limit is exceeded."""
+
+    template_fields = ('period', 'parquet_paths')
     def __init__(self, *, python_callable,period, parquet_paths, **kwargs):
         super().__init__(**kwargs)
         self.python_callable = python_callable
