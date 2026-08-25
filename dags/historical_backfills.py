@@ -6,6 +6,7 @@ from airflow.timetables.interval import CronDataIntervalTimetable
 from utils.extract import extract_daily_land_surface, extract_daily_air_quality, extract_daily_climate
 from utils.db import extract_cities, load_data
 from utils.transform import transform_daily_climate_chunks, transform_daily_land_surface, agg_hourly_air_quality
+from utils.validate import run_validation
 from utils.custom.operators import QuotaAwareOpenMeteoExtractionOperator
 
 
@@ -60,13 +61,21 @@ with DAG(
         consolidated_loc = transform_daily_climate_chunks(parquet_paths)
         return consolidated_loc
 
+    @task
+    def validate_data(parquet_path, api_source, **context):
+        validated_paths = []
+        for path in parquet_path:
+            validated_path = run_validation(parquet_path=path, api_source=api_source)
+            validated_paths.append(validated_path)
+
+        return validated_paths
+
     @task(pool="db_upsert_pool")
     def upsert_data(parquet_paths, table_name, **context):
         load_data(parquet_paths, table_name, **context)
         return None
 
-    cities = get_cities()
-    periods = get_periods()
+
 
     @task
     def build_city_period_pairs(periods, cities):
@@ -76,22 +85,53 @@ with DAG(
         return pairs #[{"period": period, "parquet_paths":cities} for period in periods]
 
     
-    pair_list = build_city_period_pairs(periods=periods, cities=cities)#partial(cities=cities).expand(periods=periods)
-    backfill_climate_period = QuotaAwareOpenMeteoExtractionOperator.partial(
-        task_id="backfill_climate",
-        python_callable=extract_daily_climate,
-        retries=0
-        ).expand_kwargs(pair_list)
+    
 
-    backfill_land_surface_period = backfill_period_land_surface.partial(cities_chunk_paths=cities).expand(period=periods)
+    @task_group(group_id="climate_period_pipeline")
+    def climate_period_pipeline(period, parquet_paths):
+        extract = QuotaAwareOpenMeteoExtractionOperator(
+            task_id="backfill_climate",
+            python_callable=extract_daily_climate,
+            period=period,
+            parquet_paths=parquet_paths,
+            retries=0
+            )
 
-    transform_climate = consolidate_daily_climate_chunks.expand(parquet_paths=backfill_climate_period.output)
-    transform_land_surface = consolidate_daily_land_surface.expand(parquet_paths=backfill_land_surface_period)
+        transform_climate = consolidate_daily_climate_chunks(parquet_paths=extract.output)
+
+        validate_climate = validate_data.override(task_id="validate_climate_pre_load")(api_source='climate', parquet_path=transform_climate)
+
+        upsert_climate = upsert_data.override(task_id="upsert_climate")(table_name='daily_climate', parquet_paths=validate_climate)
+
+    @task_group(group_id="land_surface_period_pipeline")
+    def land_surface_pipeline(period, cities_chunk_paths):
+        backfill_land_surface_period = backfill_period_land_surface(cities_chunk_paths=cities_chunk_paths, period=period)
+
+        transform_land_surface = consolidate_daily_land_surface(parquet_paths=backfill_land_surface_period)
+
+        validate_land_surface = validate_data.override(task_id="validate_land_surface_pre_load")(api_source="land_surface", parquet_path=transform_land_surface)
+
+        upsert_land_surface = upsert_data.override(task_id="upsert_land_surface")(table_name='daily_land_surface', parquet_paths=validate_land_surface)
+
+    cities = get_cities()
+    periods = get_periods()
+    pair_list = build_city_period_pairs(periods=periods, cities=cities) #partial(cities=cities).expand(periods=periods)
+
+    climate_backfill = climate_period_pipeline.expand_kwargs(pair_list)
+    land_surface_backfill = land_surface_pipeline.partial(cities_chunk_paths=cities).expand(period=periods)
 
 
-    upsert_climate = upsert_data.override(task_id="upsert_climate").partial(table_name='daily_climate').expand(parquet_path=transform_climate)
+
+    
+
+    
+    
+
+    
 
 
-    upsert_land_surface = upsert_data.override(task_id="upsert_land_surface")(
-         transform_land_surface, table_name='daily_land_surface'
-     )
+    
+
+
+    
+
