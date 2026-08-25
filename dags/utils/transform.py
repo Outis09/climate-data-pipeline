@@ -37,26 +37,36 @@ def agg_hourly_air_quality(period, parquet_paths,**context):
 
     daily_air_quality.rename(columns={'day':'date'}, inplace=True)
 
-    logical_date = context['data_interval_start'].date()
-    parquet_path = get_data_path(f'transformed/daily_air_quality/{logical_date.year}/{logical_date.month:02d}/{logical_date.day:02d}.parquet')
-    daily_air_quality.to_parquet(parquet_path, engine='pyarrow', compression='snappy', index=False)
+    file_paths = []
+    for logical_date, data in daily_air_quality.groupby('date'):
+        try:
+            logical_date = datetime.strptime(logical_date, '%Y-%m-%d')
+        except TypeError:
+            pass
+        parquet_path = get_data_path(f'transformed/daily_air_quality/{logical_date.year}/{logical_date.month:02d}/{logical_date.day:02d}.parquet')
+        data.to_parquet(parquet_path, engine='pyarrow', compression='snappy', index=False)
+        file_paths.append(str(parquet_path))
 
-    return str(parquet_path)
+    return file_paths
 
-def transform_daily_climate_chunks(parquet_paths):
-    consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
+def transform_daily_climate_chunks(raw_parquet_paths):
+    consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in raw_parquet_paths]
     consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
 
     file_paths = []
     for logical_date, data in consolidated_df.groupby('date'):
+        try:
+            logical_date = datetime.strptime(logical_date, '%Y-%m-%d')
+        except TypeError:
+            pass
         # logical_date = consolidated_df['date'].iloc[0]
         parquet_path = get_data_path(f"transformed/daily_climate/{logical_date.year}/{logical_date.month:02d}/{logical_date.day:02d}.parquet")
         data.to_parquet(parquet_path, engine='pyarrow', compression='snappy', index=False)
         file_paths.append(str(parquet_path))
     return file_paths
 
-def transform_daily_land_surface(parquet_paths):
-    consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
+def transform_daily_land_surface(raw_parquet_paths):
+    consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in raw_parquet_paths]
     consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
 
     consolidated_df.rename(columns={
@@ -80,7 +90,11 @@ def transform_daily_land_surface(parquet_paths):
 
     file_paths = []
     for logical_date, data in consolidated_df.groupby('date'):
-        parquet_path = get_data_path(f"transformed/ daily_land_surface/{logical_date.year}/{logical_date.month:02d}/{logical_date.day:02d}.parquet")
+        try:
+            logical_date = datetime.strptime(logical_date, '%Y-%m-%d')
+        except TypeError:
+            pass
+        parquet_path = get_data_path(f"transformed/daily_land_surface/{logical_date.year}/{logical_date.month:02d}/{logical_date.day:02d}.parquet")
         data.to_parquet(parquet_path, engine='pyarrow', compression='snappy', index=False)
         file_paths.append(str(parquet_path))
     return file_paths
