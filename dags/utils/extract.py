@@ -24,26 +24,6 @@ def extract_daily_climate(period: list, cities_chunk_path):
     else:
          start_date = period[0]
          end_date = period[1]
-     
-    # if period == 'daily':         
-    #     start_date = context['data_interval_start'].date()
-    #     start_date_no_dash = start_date.strftime('%Y%m%d')
-    #     end_date = start_date 
-    #     end_date_no_dash = start_date_no_dash
-
-    #     file_name = get_data_path(f'raw/daily_climate/{start_date}/{chunk_id}.parquet')
-        
-    # elif period == 'yearly':
-    #     start_date = context['data_interval_start'].date()
-    #     start_date_no_dash = start_date.strftime('%Y%m%d')
-    #     end_date = context['data_interval_end'].date()
-    #     end_date_no_dash = end_date.strftime('%Y%m%d')
-
-    #     file_name = get_data_path(f"raw/annual-backfills/climate/{start_date.year}/{chunk_id}.parquet")
-    # else:
-    #      raise ValueError(f'Invalid period: {period}. Expected "daily" or "yearly"')
-
-#    file_name.parent.mkdir(parents=True, exist_ok=True)
 
     cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
     retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
@@ -140,7 +120,7 @@ def extract_daily_climate(period: list, cities_chunk_path):
     file_names = []
     for climate_date, data in comb.groupby('date'):
         # climate_date = datetime.strptime(climate_date.strftime() '%Y-%m-%d')
-        file_name = get_data_path(f"raw/daily_climate/{climate_date.year}/{climate_date.month:0.2d}/{climate_date.day:0.2d}/{chunk_id}.parquet")    
+        file_name = get_data_path(f"raw/daily_climate/{climate_date.year}/{climate_date.month:02d}/{climate_date.day:02d}/{chunk_id}.parquet")    
         data.to_parquet(file_name, engine='pyarrow', compression='snappy', index=False)
         file_names.append(str(file_name))
     return file_names
@@ -153,25 +133,13 @@ def extract_daily_air_quality(period, parquet_chunk_path, **context):
     else:
             parquet_chunk_path = GSPath(parquet_chunk_path)
     chunk_id = parquet_chunk_path.stem
-     
-    if period == 'daily':         
-        start_date = context['data_interval_start'].date()
-        start_date_no_dash = start_date.strftime('%Y%m%d')
-        end_date = start_date 
-        end_date_no_dash = start_date_no_dash
 
-        file_path = get_data_path(f'raw/daily_air_quality/{start_date}/{chunk_id}.parquet')
-        
-    elif period == 'yearly':
-        start_date = context['data_interval_start'].date()
-        start_date_no_dash = start_date.strftime('%Y%m%d')
-        end_date = context['data_interval_end'].date()
-        end_date_no_dash = end_date.strftime('%Y%m%d')
-
-        file_path = get_data_path(f'raw/annual-backfills/air_quality/{start_date.year}/{chunk_id}.parquet')
+    if len(period) == 1:
+         start_date = period[0]
+         end_date = period[0]
     else:
-         raise ValueError(f'Invalid period: {period}. Expected "daily" or "yearly"')
-
+         start_date = period[0]
+         end_date = period[1]    
 
     cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
     retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
@@ -230,9 +198,12 @@ def extract_daily_air_quality(period, parquet_chunk_path, **context):
         dfs.append(hourly_dataframe)
     
     comb = pd.concat(dfs, ignore_index=True)
-    chunk_id = parquet_chunk_path.stem
-    comb.to_parquet(file_path, index=False)
-    return str(file_path)
+    file_path = []
+    for air_quality_date, data in comb.groupby('date'):
+        file_name = get_data_path(f"raw/daily_air_quality/{air_quality_date.year}/{air_quality_date.month:02d}/{air_quality_date.day:02d}/{chunk_id}.parquet")
+        data.to_parquet(file_path, index=False)
+        file_path.append(str(file_name))
+    return file_path
 
 
 def extract_daily_land_surface(period, cities_chunk_paths):
