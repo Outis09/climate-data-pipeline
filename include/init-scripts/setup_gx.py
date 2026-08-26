@@ -199,18 +199,18 @@ def configure_checkpoint(context, api_source, storage_type, gcs_bucket=None):
                 gcs_recursive_file_discovery=True
             )
 
-        try:
-            batch_definition = parquet_asset.get_batch_definition(f"daily_{api_source}_batch")
-        except LookupError:
-            batch_definition = parquet_asset.add_batch_definition_daily(
-                name=f"daily_{api_source}_batch",
-                regex=(
-                    r"(?P<year>\d{4})-"
-                    r"(?P<month>\d{2})-"
-                    r"(?P<day>\d{2})"
-                    r"\.parquet"
-                )
+    try:
+        batch_definition = parquet_asset.get_batch_definition(f"daily_{api_source}_batch")
+    except LookupError:
+        batch_definition = parquet_asset.add_batch_definition_daily(
+            name=f"daily_{api_source}_batch",
+            regex=(
+                r"(?P<year>\d{4})/"
+                r"(?P<month>\d{2})/"
+                r"(?P<day>\d{2})"
+                r"\.parquet"
             )
+        )
 
     validation_definition = context.validation_definitions.add_or_update(
         gx.ValidationDefinition(
