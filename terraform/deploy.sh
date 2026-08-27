@@ -75,3 +75,33 @@ if ! bq --project_id="$PROJECT_ID" load --source_format=CSV  --skip_leading_rows
     exit 1
 fi
 echo "Cities data uploaded successfully to BigQuery." | tee -a "$LOG_FILE"
+
+echo "Setting up Great Expectations..." | tee -a "$LOG_FILE"
+
+# copy placeholder file into transformed file location for great expectations to run against
+if ! gcloud storage cp ./placeholder.parquet "$CITIES_GCS_PREFIX/transformed/daily_climate/placeholder.parquet" --quiet 2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error uploading placeholder.parquet to GCS. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+if ! gcloud storage cp ./placeholder.parquet "$CITIES_GCS_PREFIX/transformed/daily_air_quality/placeholder.parquet" --quiet 2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error uploading placeholder.parquet to GCS. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+if ! gcloud storage cp ./placeholder.parquet "$CITIES_GCS_PREFIX/transformed/daily_land_surface/placeholder.parquet" --quiet 2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error uploading placeholder.parquet to GCS. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+# copy setup fle into composer env bucket
+COMPOSER_DATA_GCS_PREFIX=$(terraform output -raw composer_data_gcs_prefix)
+if ! gcloud storage cp ../include/init-scripts/setup_gx.py "$COMPOSER_DATA_GCS_PREFIX/setup_gx.py" --quiet 2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error uploading include/init-scripts/setup_gx.py to GCS. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
+# trigger setup_gx dag to run
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" dags trigger -- setup_great_expectations 2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error setting up Great Expectations. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
