@@ -85,8 +85,6 @@ with DAG(
         return pairs #[{"period": period, "parquet_paths":cities} for period in periods]
 
     
-    
-
     @task_group(group_id="climate_period_pipeline")
     def climate_period_pipeline(period, parquet_paths):
         extract = QuotaAwareOpenMeteoExtractionOperator(
@@ -94,7 +92,10 @@ with DAG(
             python_callable=extract_daily_climate,
             period=period,
             parquet_paths=parquet_paths,
-            retries=0
+            retries=2,
+            pool="open_meteo_extraction_pool",
+            pool_slots=1,
+            priority_weight=10
             )
 
         transform_climate = consolidate_daily_climate_chunks(parquet_paths=extract.output)

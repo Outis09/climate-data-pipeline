@@ -144,14 +144,20 @@ with DAG(
     task_id="fetch_daily_climate",
     python_callable=extract_daily_climate,
     period=["{{ ds }}"],
-    parquet_paths=cities
+    parquet_paths=cities,
+    pool="open_meteo_extraction_pool",
+    pool_slots=1,
+    priority_weight=100
     )
 
     fetch_air_quality = QuotaAwareOpenMeteoExtractionOperator(
         task_id="fetch_daily_air_quality",
         python_callable=extract_daily_air_quality,
         period=["{{ ds }}"],
-        parquet_paths=cities
+        parquet_paths=cities,
+        pool="open_meteo_extraction_pool",
+        pool_slots=1,
+        priority_weight=100
     )
     # fetch_climate = fetch_daily_climate.expand(parquet_chunk_path=cities)
     # fetch_air_quality = fetch_daily_air_quality.expand(parquet_chunk_path=cities)
