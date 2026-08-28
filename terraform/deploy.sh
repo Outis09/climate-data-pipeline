@@ -2,7 +2,7 @@
 
 set -eo pipefail
 
-LOG_FILE="terraform_$(date +%F_%T).log"
+LOG_FILE="logs/terraform_$(date +%F_%T).log"
 echo "Deploying the Terraform configuration..."
 
 echo "Initializing Terraform..." | tee -a "$LOG_FILE"
@@ -103,5 +103,20 @@ fi
 # trigger setup_gx dag to run
 if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" dags trigger -- setup_great_expectations 2>&1 | tee -a "$LOG_FILE"; then
     echo "Error setting up Great Expectations. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+# get date value from terraform output
+HISTORICAL_DATA_START_DATE=$(terraform output -raw historical_data_start_date)
+
+# validate that the date is in the correct format (YYYY-MM-DD)
+if ! [[ "$HISTORICAL_DATA_START_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && date -d "$HISTORICAL_DATA_START_DATE" >/dev/null 2>&1; then
+    echo "Error: historical_data_start_date is not in the correct format (YYYY-MM-DD). Please check your Terraform configuration." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+# trigger the historical data extraction dag to run
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" dags trigger -- historical_backfill 2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error triggering historical_backfill DAG. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
     exit 1
 fi
