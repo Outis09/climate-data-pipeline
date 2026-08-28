@@ -36,3 +36,15 @@ variable "bucket_name" {
   description = "The name of the storage bucket"
   type        = string
 }
+
+variable "climate_country" {
+  description = "The country for which climate data is being collected"
+  type        = string
+  default     = "Ghana"
+}
+
+variable "historical_data_start_date" {
+  description = "The start date for historical climate data collection (YYYY-MM-DD)"
+  type        = string
+  default     = "2001-01-01"
+}
