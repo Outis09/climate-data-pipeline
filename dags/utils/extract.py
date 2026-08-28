@@ -10,7 +10,7 @@ from utils.helpers import get_data_path
 import os
 from cloudpathlib import GSPath
 
-def extract_daily_climate(period: list, cities_chunk_path):     
+def extract_daily_climate(period: list, cities_chunk_path):    
     storage_type = os.getenv('STORAGE_BACKEND')
     if storage_type == 'local':
         parquet_chunk_path = Path(cities_chunk_path)
@@ -126,12 +126,12 @@ def extract_daily_climate(period: list, cities_chunk_path):
     return file_names
 
 
-def extract_daily_air_quality(period, parquet_chunk_path, **context):
+def extract_daily_air_quality(period, cities_chunk_path):
     storage_type = os.getenv('STORAGE_BACKEND')
     if storage_type == 'local':
-        parquet_chunk_path = Path(parquet_chunk_path)
+        parquet_chunk_path = Path(cities_chunk_path)
     else:
-            parquet_chunk_path = GSPath(parquet_chunk_path)
+        parquet_chunk_path = GSPath(cities_chunk_path)
     chunk_id = parquet_chunk_path.stem
 
     if len(period) == 1:
@@ -198,10 +198,12 @@ def extract_daily_air_quality(period, parquet_chunk_path, **context):
         dfs.append(hourly_dataframe)
     
     comb = pd.concat(dfs, ignore_index=True)
+    comb['day'] = comb['date'].dt.date
     file_path = []
-    for air_quality_date, data in comb.groupby('date'):
+    for air_quality_date, data in comb.groupby('day'):
         file_name = get_data_path(f"raw/daily_air_quality/{air_quality_date.year}/{air_quality_date.month:02d}/{air_quality_date.day:02d}/{chunk_id}.parquet")
-        data.to_parquet(file_path, index=False)
+        data.drop(columns=['day'], inplace=True)
+        data.to_parquet(file_name, index=False)
         file_path.append(str(file_name))
     return file_path
 
