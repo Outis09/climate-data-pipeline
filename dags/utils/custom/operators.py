@@ -1,6 +1,7 @@
 from datetime import timedelta, datetime
 
 from airflow.sdk import BaseOperator, Context
+from airflow.sdk.observability import stats
 from airflow.providers.standard.triggers.temporal import TimeDeltaTrigger
 from airflow.sdk.exceptions import AirflowException
 
@@ -32,19 +33,24 @@ class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
                 if "minutely api request limit exceeded" in reason:
                     self.log.warning("Minutely API quota exhausted. Deferring task for 1 minute.")
                     delay = timedelta(minutes=1)
+                    limit = 'minutely'
                 elif "hourly api request limit exceeded" in reason:
                     self.log.warning(f"Hourly API quota exhausted. Deferring task for 1 hour.")
                     delay = timedelta(hours=1)
+                    limit = 'hourly'
                     
                 elif 'daily api request limit exceeded' in reason:
                     now = datetime.now()
                     next_run = (now + timedelta(days=1)).replace(hour=0, minute=30)
                     delay = next_run - now
                     self.log.warning(f"Daily API quota exhausted. Deferring task for {delay} hours.")
+                    limit = 'daily'
                     # delay = timedelta(days=1)
-
                 else:
                     raise AirflowException(error)
+
+
+                stats.incr(stat="pipeline.open_meteo_api_rate_limit_hits", count=1, tags={"limit_type": limit})
 
                 self.defer(
                 trigger=TimeDeltaTrigger(delay),
