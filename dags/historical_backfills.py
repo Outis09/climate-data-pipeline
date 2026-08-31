@@ -1,8 +1,8 @@
 from airflow.sdk import DAG, task, task_group
-import pendulum
+from datetime import datetime
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.timetables.interval import CronDataIntervalTimetable
-
+from airflow.sdk.observability import stats
 from utils.extract import extract_daily_land_surface, extract_daily_air_quality, extract_daily_climate
 from utils.db import extract_cities, load_data
 from utils.transform import transform_daily_climate_chunks, transform_daily_land_surface, agg_hourly_air_quality
@@ -18,7 +18,7 @@ with DAG(
     catchup=False
 ):
     @task
-    def get_periods():
+    def get_periods(**context):
         import os
         from datetime import datetime, timedelta
         start_date = datetime.strptime(os.getenv('START_DATE'), '%Y-%m-%d')
@@ -32,6 +32,9 @@ with DAG(
             year_start = max(start_date, datetime(year,1,1))
             year_end = min(end_date, datetime(year, 12, 31))
             periods.append([year_start.strftime('%Y-%m-%d'), year_end.strftime('%Y-%m-%d')])
+
+        num_years = len(years)
+        stats.gauge("pipeline.backfill.years_requested", value=num_years)
         return periods
     @task
     def get_cities() -> list[str]:
@@ -72,8 +75,16 @@ with DAG(
 
     @task(pool="db_upsert_pool")
     def upsert_data(parquet_paths, table_name, **context):
-        load_data(parquet_paths, table_name, **context)
-        return None
+        processed_date = load_data(parquet_paths, table_name, **context)
+        return processed_date
+
+    @task
+    def emit_year_processed_metric(processed_date, metric_name):
+        try:
+            processed_date = datetime.strptime(processed_date, '%Y-%m-%d')
+        except:
+            processed_date = processed_date
+        stats.gauge(stat=metric_name, value=1, tags={"year": str(processed_date.year)})
 
 
 
@@ -104,6 +115,8 @@ with DAG(
 
         upsert_climate = upsert_data.override(task_id="upsert_climate")(table_name='daily_climate', parquet_paths=validate_climate)
 
+        emit_climate_year_processed_metric = emit_year_processed_metric.override(task_id="emit_climate_year_processed")(processed_date=upsert_climate, metric_name="pipeline.backfill.climate.years_processed")
+
     @task_group(group_id="land_surface_period_pipeline")
     def land_surface_pipeline(period, cities_chunk_paths):
         backfill_land_surface_period = backfill_period_land_surface(cities_chunk_paths=cities_chunk_paths, period=period)
@@ -113,6 +126,9 @@ with DAG(
         validate_land_surface = validate_data.override(task_id="validate_land_surface_pre_load")(api_source="land_surface", parquet_path=transform_land_surface)
 
         upsert_land_surface = upsert_data.override(task_id="upsert_land_surface")(table_name='daily_land_surface', parquet_paths=validate_land_surface)
+
+        emit_climate_year_processed_metric = emit_year_processed_metric.override(task_id="emit_land_surface_year_processed")(processed_date=upsert_land_surface, metric_name="pipeline.backfill.land_surface.years_processed")
+
 
     cities = get_cities()
     periods = get_periods()
