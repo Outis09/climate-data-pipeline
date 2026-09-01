@@ -9,7 +9,7 @@ def test_dag_loaded(dagbag):
     dag = dagbag.get_dag(dag_id='historical_backfill')
     assert dagbag.import_errors == {}
     assert dag is not None
-    assert len(dag.tasks) == 13
+    assert len(dag.tasks) == 18
 
 def assert_dag_dict_equal(source, dag):
     assert dag.task_dict.keys() == source.keys()
@@ -23,7 +23,12 @@ def test_dag(dagbag):
     dag = dagbag.get_dag(dag_id='historical_backfill')
     assert_dag_dict_equal(
         {
-            "build_city_period_pairs": ['climate_period_pipeline.backfill_climate'],
+            "air_quality_pipeline.backfill_air_quality": ['air_quality_pipeline.consolidate_daily_air_quality'],
+            "air_quality_pipeline.consolidate_daily_air_quality": ['air_quality_pipeline.validate_pre_load'],
+            "air_quality_pipeline.emit_air_quality_year_processed": [],
+            "air_quality_pipeline.upsert_air_quality": ['air_quality_pipeline.emit_air_quality_year_processed'],
+            "air_quality_pipeline.validate_pre_load": ['air_quality_pipeline.upsert_air_quality'],
+            "build_city_period_pairs": ['air_quality_pipeline.backfill_air_quality', 'climate_period_pipeline.backfill_climate'],
             "climate_period_pipeline.backfill_climate": ['climate_period_pipeline.consolidate_daily_climate_chunks'],
             "climate_period_pipeline.consolidate_daily_climate_chunks": ['climate_period_pipeline.validate_climate_pre_load'],
             "climate_period_pipeline.emit_climate_year_processed": [],
