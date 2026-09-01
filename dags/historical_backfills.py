@@ -65,6 +65,11 @@ with DAG(
         return consolidated_loc
 
     @task
+    def consolidate_daily_air_quality(parquet_paths):
+        consolidated_loc = agg_hourly_air_quality(raw_parquet_paths=parquet_paths)
+        return consolidated_loc
+
+    @task
     def validate_data(parquet_path, api_source, **context):
         validated_paths = []
         for path in parquet_path:
@@ -117,6 +122,27 @@ with DAG(
 
         emit_climate_year_processed_metric = emit_year_processed_metric.override(task_id="emit_climate_year_processed")(processed_date=upsert_climate, metric_name="pipeline.backfill.climate.years_processed")
 
+    @task_group(group_id="air_quality_pipeline")
+    def air_quality_period_pipeline(period, parquet_paths):
+        extract = QuotaAwareOpenMeteoExtractionOperator(
+            task_id="backfill_air_quality",
+            python_callable=extract_daily_air_quality,
+            period=period,
+            parquet_paths=parquet_paths,
+            retries=2,
+            pool="open_meteo_extraction_pool",
+            pool_slots=1,
+            priority_weight=10
+        )
+
+        transform_air_quality = consolidate_daily_air_quality(parquet_paths=extract.output)
+
+        validate_air_quality = validate_data.override(task_id="validate_pre_load")(api_source='air_quality', parquet_path=transform_air_quality)
+
+        upsert_air_quality = upsert_data.override(task_id="upsert_air_quality")(table_name="daily_air_quality", parquet_paths=validate_air_quality)
+
+        emit_air_quality_year_processed_metric = emit_year_processed_metric.override(task_id="emit_air_quality_year_processed")(processed_date=upsert_air_quality, metric_name="pipeline.backfill_air_quality.years_processed")
+
     @task_group(group_id="land_surface_period_pipeline")
     def land_surface_pipeline(period, cities_chunk_paths):
         backfill_land_surface_period = backfill_period_land_surface(cities_chunk_paths=cities_chunk_paths, period=period)
@@ -135,6 +161,7 @@ with DAG(
     pair_list = build_city_period_pairs(periods=periods, cities=cities) #partial(cities=cities).expand(periods=periods)
 
     climate_backfill = climate_period_pipeline.expand_kwargs(pair_list)
+    air_quality_backfill = air_quality_period_pipeline.expand_kwargs(pair_list)
     land_surface_backfill = land_surface_pipeline.partial(cities_chunk_paths=cities).expand(period=periods)
 
 
