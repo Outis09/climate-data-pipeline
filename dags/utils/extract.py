@@ -5,7 +5,7 @@ import openmeteo_requests
 import requests_cache
 from retry_requests import retry
 from pathlib import Path
-from airflow.sdk.exceptions import AirflowException
+from airflow.sdk.exceptions import AirflowException, AirflowSkipException
 from utils.helpers import get_data_path
 import os
 from cloudpathlib import GSPath
@@ -128,6 +128,7 @@ def extract_daily_climate(period: list, cities_chunk_path):
 
 def extract_daily_air_quality(period, cities_chunk_path):
     storage_type = os.getenv('STORAGE_BACKEND')
+
     if storage_type == 'local':
         parquet_chunk_path = Path(cities_chunk_path)
     else:
@@ -140,6 +141,13 @@ def extract_daily_air_quality(period, cities_chunk_path):
     else:
          start_date = period[0]
          end_date = period[1]    
+
+    air_quality_start_date = "2022-08-04"
+
+    if end_date < air_quality_start_date:
+        raise AirflowSkipException(f"Air quality data unavailable for {start_date} to {end_date}")
+    else:
+        start_date = max(start_date, air_quality_start_date)
 
     cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
     retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
