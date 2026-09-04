@@ -9,6 +9,8 @@ locals {
     "bigquery.googleapis.com",
     "storage.googleapis.com",
     "iamcredentials.googleapis.com",
+    "cloudbuild.googleapis.com",
+    "secretmanager.googleapis.com",
   ])
 }
 
@@ -199,4 +201,74 @@ resource "google_composer_environment" "climate_data_environment" {
     # google_project_service.storage_api,
     google_bigquery_dataset_access.climate_data_access,
     google_storage_bucket_iam_member.climate_data_bucket_access]
+}
+
+// Create a secret containing the personal access token and grant permissions to the Service Agent
+resource "google_secret_manager_secret" "github_token_secret" {
+    project = var.project_id
+    secret_id = var.secret_id
+
+    replication {
+        auto {}
+    }
+}
+
+resource "google_secret_manager_secret_version" "github_token_secret_version" {
+    secret = google_secret_manager_secret.github_token_secret.id
+    secret_data = var.github_pat
+}
+
+data "google_iam_policy" "serviceagent_secretAccessor" {
+    binding {
+        role = "roles/secretmanager.secretAccessor"
+        members = ["serviceAccount:service-${var.project_number}@gcp-sa-cloudbuild.iam.gserviceaccount.com"]
+    }
+}
+
+resource "google_secret_manager_secret_iam_policy" "policy" {
+  project = google_secret_manager_secret.github_token_secret.project
+  secret_id = google_secret_manager_secret.github_token_secret.secret_id
+  policy_data = data.google_iam_policy.serviceagent_secretAccessor.policy_data
+}
+
+// Create the GitHub connection
+resource "google_cloudbuildv2_connection" "github_connection" {
+    project = var.project_id
+    location = var.region
+    name = var.connection_name
+
+    github_config {
+        app_installation_id = var.installation_id
+        authorizer_credential {
+            oauth_token_secret_version = google_secret_manager_secret_version.github_token_secret_version.id
+        }
+    }
+    depends_on = [google_secret_manager_secret_iam_policy.policy]
+}
+
+    resource "google_cloudbuildv2_repository" "my_repository" {
+      project = var.project_id
+      location = var.region
+      name = var.repository_name
+      parent_connection = google_cloudbuildv2_connection.github_connection.name
+      remote_uri = var.remote_uri
+  }
+
+// service account for cloud build triggers
+resource "google_service_account" "cloud_build_service_account" {
+  provider = google-beta
+  account_id   = "cloud-build-service-account"
+  display_name = "Cloud Build Service Account"
+}
+
+resource "google_project_iam_member" "cloudbuild_sa_builder" {
+  project  = var.project_id
+  member   = format("serviceAccount:%s", google_service_account.cloud_build_service_account.email)
+  role     = "roles/cloudbuild.builds.builder"
+}
+
+resource "google_project_iam_member" "cloudbuild_sa_log_accessor" {
+  project  = var.project_id
+  member   = format("serviceAccount:%s", google_service_account.cloud_build_service_account.email)
+  role     = "roles/logging.logWriter"
 }
