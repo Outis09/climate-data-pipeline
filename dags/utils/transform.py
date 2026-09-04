@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from utils.helpers import get_data_path
 
-def agg_hourly_air_quality(period, parquet_paths,**context):
+def agg_hourly_air_quality(parquet_paths):
     dfs = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
     df = pd.concat(dfs, ignore_index=True)
 
