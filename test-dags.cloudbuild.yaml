@@ -15,3 +15,6 @@ steps:
   - name: python:3.13-slim
     entrypoint: python3.13
     args: ["-m", "pytest", "-s", "dags/"]
+
+options:
+  logging: CLOUD_LOGGING_ONLY
