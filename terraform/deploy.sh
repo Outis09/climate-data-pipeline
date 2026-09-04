@@ -120,3 +120,22 @@ if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$P
     echo "Error triggering historical_backfill DAG. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
     exit 1
 fi
+
+
+GITHUB_CONNECTION_NAME=$(terraform output -raw github_connection_name)
+SERVICE_ACCOUNT_EMAIL=$(terraform output -raw cloud_build_presubmit_service_account)
+SERVICE_ACCOUNT="projects/${PROJECT_ID}/serviceAccounts/${SERVICE_ACCOUNT_EMAIL}"
+
+# create cloud build trigger for presubmit checks
+if ! gcloud builds triggers create github \
+    --project="$PROJECT_ID" \
+    --name="presubmit-checks" \
+    --repository=projects/"$PROJECT_ID"/locations/"$LOCATION"/connections/"$GITHUB_CONNECTION_NAME"/repositories/climate-data-pipeline \
+    --pull-request-pattern="^main$" \
+    --build-config="test-dags.cloudbuild.yaml" \
+    --region="$LOCATION"  \
+    --service-account="$SERVICE_ACCOUNT" \
+    --comment-control="COMMENTS_DISABLED"  2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error creating Cloud Build trigger for presubmit checks. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+ fi
