@@ -7,6 +7,7 @@ from utils.extract import extract_daily_land_surface, extract_daily_air_quality,
 from utils.db import extract_cities, load_data
 from utils.transform import transform_daily_climate_chunks, transform_daily_land_surface, agg_hourly_air_quality
 from utils.validate import run_validation
+from utils.metrics import emit_gauge
 from utils.custom.operators import QuotaAwareOpenMeteoExtractionOperator
 
 
@@ -34,7 +35,8 @@ with DAG(
             periods.append([year_start.strftime('%Y-%m-%d'), year_end.strftime('%Y-%m-%d')])
 
         num_years = len(years)
-        stats.gauge("pipeline.backfill.years_requested", value=num_years)
+        emit_gauge("pipeline/backfill/years_requested", value=num_years)
+        # stats.gauge("pipeline.backfill.years_requested", value=num_years)
         return periods
     @task
     def get_cities() -> list[str]:
@@ -89,7 +91,8 @@ with DAG(
             processed_date = datetime.strptime(processed_date, '%Y-%m-%d')
         except:
             processed_date = processed_date
-        stats.gauge(stat=metric_name, value=1, tags={"year": str(processed_date.year)})
+        # stats.gauge(stat=metric_name, value=1, tags={"year": str(processed_date.year)})
+        emit_gauge(metric_name=metric_name, value=1, labels={"year": str(processed_date.year)})
 
 
 
