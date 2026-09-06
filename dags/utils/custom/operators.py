@@ -4,7 +4,7 @@ from airflow.sdk import BaseOperator, Context
 from airflow.sdk.observability import stats
 from airflow.providers.standard.triggers.temporal import TimeDeltaTrigger
 from airflow.sdk.exceptions import AirflowException
-from utils.metrics import emit_cumulative
+from dags.utils.metrics import emit_cumulative
 
 class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
     """A custom operator, built using the BaseOperator, that defers an Open Meteo extraction task for 24 hours when the daily API limit is exceeded."""
