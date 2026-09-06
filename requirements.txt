@@ -5,3 +5,8 @@ great_expectations
 google-auth
 google-cloud-monitoring
 cloudpathlib
+apache-airflow-providers-postgres
+apache-airflow[statsd]
+apache-airflow-providers-google
+google-cloud-bigquery
+google-cloud-storage
