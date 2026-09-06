@@ -274,6 +274,7 @@ resource "google_project_iam_member" "cloudbuild_sa_log_accessor" {
 }
 
 resource "google_monitoring_metric_descriptor" "historical_years_processed" {
+    project = var.project_id
     description = "Number of historical years processed"
     display_name = "Historical Years Processed"
     type = "custom.googleapis.com/pipeline/historical/years_processed"
@@ -294,6 +295,7 @@ resource "google_monitoring_metric_descriptor" "historical_years_processed" {
 }
 
 resource "google_monitoring_metric_descriptor" "historical_years_requested" {
+    project = var.project_id
     description = "Number of historical years requested"
     display_name = "Historical Years Requested"
     type = "custom.googleapis.com/pipeline/historical/years_requested"
@@ -303,6 +305,7 @@ resource "google_monitoring_metric_descriptor" "historical_years_requested" {
 }
 
 resource "google_monitoring_metric_descriptor" "open_meteo_api_rate_limit_hits" {
+    project = var.project_id
     description = "Number of times the Open Meteo API rate limit was hit"
     display_name = "Open Meteo API Rate Limit Hits"
     type = "custom.googleapis.com/pipeline/global/open_meteo_api_rate_limit_hits"
