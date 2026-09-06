@@ -273,26 +273,22 @@ resource "google_project_iam_member" "cloudbuild_sa_log_accessor" {
   role     = "roles/logging.logWriter"
 }
 
-resource "google_monitoring_metric_descriptor" "land_surface_years_proc_metric" {
-    description = "Number of historical land surface years processed"
-    display_name = "Historical Land Surface Years Processed"
-    type = "custom.googleapis.com/pipeline/historical/land_surface_years_processed"
+resource "google_monitoring_metric_descriptor" "historical_years_processed" {
+    description = "Number of historical years processed"
+    display_name = "Historical Years Processed"
+    type = "custom.googleapis.com/pipeline/historical/years_processed"
     metric_kind = "GAUGE"
     value_type = "DOUBLE"
-}
 
-resource "google_monitoring_metric_descriptor" "climate_years_proc_metric" {
-    description = "Number of historical climate years processed"
-    display_name = "Historical Climate Years Processed"
-    type = "custom.googleapis.com/pipeline/historical/climate_years_processed"
-    metric_kind = "GAUGE"
-    value_type = "DOUBLE"
-}
+    labels {
+        key = "source"
+        value_type = "STRING"
+        description = "Source of the historical data (climate or air quality or land surface)"
+    }
 
-resource "google_monitoring_metric_descriptor" "air_quality_years_proc_metric" {
-    description = "Number of historical air quality years processed"
-    display_name = "Historical Air Quality Years Processed"
-    type = "custom.googleapis.com/pipeline/historical/air_quality_years_processed"
-    metric_kind = "GAUGE"
-    value_type = "DOUBLE"
+    labels {
+        key = "year"
+        value_type = "INT64"
+        description = "Year of the historical data processed"
+    }
 }
