@@ -199,3 +199,6 @@ with DAG(
 
     start >> cities
     [upsert_climate , upsert_air_quality, upsert_land_surface] >> end
+
+
+    

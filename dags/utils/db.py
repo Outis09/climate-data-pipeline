@@ -165,6 +165,7 @@ def bq_upsert_tables(parquet_path, table_name, run_id):
     df_list = [pd.read_parquet(parquet_path) for path in parquet_path]
     df = pd.concat(df_list, ignore_index=True)
     df['date'] = pd.to_datetime(df['date']).dt.date
+    first_date = df['date'].iloc[0]
 
     bq_client = bigquery.Client()
 
@@ -244,11 +245,13 @@ def bq_upsert_tables(parquet_path, table_name, run_id):
             staging_table,
             not_found_ok=True
         )
+    return first_date
 
 def upsert_postgres(parquet_path, table_name):
     df_list = [pd.read_parquet(path) for path in parquet_path]
     df = pd.concat(df_list, ignore_index=True)
     df['date'] = pd.to_datetime(df['date']).dt.date
+    first_date = df['date'].iloc[0]
     # upsert_df.replace({np.nan: None}, inplace=True)
 
     hook = PostgresHook(postgres_conn_id='weather_db')
@@ -262,11 +265,13 @@ def upsert_postgres(parquet_path, table_name):
         target_fields=df.columns.to_list(),
         conflict_fields=['city_id', 'date']
     )
+    return first_date
 
 def load_data(parquet_path, table_name, **context):
     storage_type = os.getenv('STORAGE_BACKEND')
 
     if storage_type == 'local':
-        upsert_postgres(parquet_path, table_name)
+        proc_date = upsert_postgres(parquet_path, table_name)
     if storage_type == 'gcs':
-        bq_upsert_tables(parquet_path, table_name, run_id=context['run_id'])
+        proc_date = bq_upsert_tables(parquet_path, table_name, run_id=context['run_id'])
+    return proc_date
