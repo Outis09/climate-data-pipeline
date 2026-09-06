@@ -272,3 +272,11 @@ resource "google_project_iam_member" "cloudbuild_sa_log_accessor" {
   member   = format("serviceAccount:%s", google_service_account.cloud_build_service_account.email)
   role     = "roles/logging.logWriter"
 }
+
+resource "google_monitoring_metric_descriptor" "land_surface_years_proc_metric" {
+    description = "Number of historical land surface years processed"
+    display_name = "Historical Land Surface Years Processed"
+    type = "custom.googleapis.com/pipeline/historical/land_surface_years_processed"
+    metric_kind = "GAUGE"
+    value_type = "DOUBLE"
+}
