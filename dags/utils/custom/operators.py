@@ -56,15 +56,16 @@ class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
                 # ti.tr
                 
                 # stats.incr(stat="pipeline.open_meteo_api_rate_limit_hits", count=1, tags={"limit_type": limit})
-                emit_cumulative(metric_name="pipeline/global/opne_meteo_api_rate_limit_hits",
-                                value=1,
-                                labels={'limit_type':limit},
-                                dag_id=ti.dag_id,
-                                start_time=ti.start_date,
-                                run_id=ti.run_id,
-                                task_id=ti.task_id,
-                                map_index=ti.map_index,
-                                try_number=ti.try_number)
+                if ti is not None:
+                    emit_cumulative(metric_name="pipeline/global/open_meteo_api_rate_limit_hits",
+                                    value=1,
+                                    labels={'limit_type':limit},
+                                    dag_id=ti.dag_id,
+                                    start_time=ti.start_date,
+                                    run_id=ti.run_id,
+                                    task_id=ti.task_id,
+                                    map_index=ti.map_index,
+                                    try_number=ti.try_number)
 
                 self.defer(
                 trigger=TimeDeltaTrigger(delay),
