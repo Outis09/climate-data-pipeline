@@ -6,8 +6,9 @@ def dagbag():
     return DagBag(dag_folder="/opt/airflow/dags")
 
 def test_dag_loaded(dagbag):
+    assert dagbag.import_errors == {}, dagbag.import_errors
     dag = dagbag.dags['historical_backfill']
-    assert dagbag.import_errors == {}
+    # assert dagbag.import_errors == {}
     assert dag is not None
     assert len(dag.tasks) == 18
 
