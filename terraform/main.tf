@@ -302,3 +302,16 @@ resource "google_monitoring_metric_descriptor" "historical_years_requested" {
 
 }
 
+resource "google_monitoring_metric_descriptor" "open_meteo_api_rate_limit_hits" {
+    description = "Number of times the Open Meteo API rate limit was hit"
+    display_name = "Open Meteo API Rate Limit Hits"
+    type = "custom.googleapis.com/pipeline/global/open_meteo_api_rate_limit_hits"
+    metric_kind = "CUMULATIVE"
+    value_type = "INT64"
+
+    labels {
+        key = "limit_type"
+        value_type = "STRING"
+        description = "Type of rate limit hit"
+    }
+}
