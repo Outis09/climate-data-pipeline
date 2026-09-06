@@ -280,3 +280,19 @@ resource "google_monitoring_metric_descriptor" "land_surface_years_proc_metric" 
     metric_kind = "GAUGE"
     value_type = "DOUBLE"
 }
+
+resource "google_monitoring_metric_descriptor" "climate_years_proc_metric" {
+    description = "Number of historical climate years processed"
+    display_name = "Historical Climate Years Processed"
+    type = "custom.googleapis.com/pipeline/historical/climate_years_processed"
+    metric_kind = "GAUGE"
+    value_type = "DOUBLE"
+}
+
+resource "google_monitoring_metric_descriptor" "air_quality_years_proc_metric" {
+    description = "Number of historical air quality years processed"
+    display_name = "Historical Air Quality Years Processed"
+    type = "custom.googleapis.com/pipeline/historical/air_quality_years_processed"
+    metric_kind = "GAUGE"
+    value_type = "DOUBLE"
+}
