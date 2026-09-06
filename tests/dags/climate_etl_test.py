@@ -3,7 +3,7 @@ from airflow.dag_processing.dagbag import DagBag
 
 @pytest.fixture()
 def dagbag():
-    return DagBag(dag_folder="/opt/airflow/dags")
+    return DagBag(dag_folder="dags")
 
 def test_dag_loaded(dagbag):
     assert dagbag.import_errors == {}, dagbag.import_errors
