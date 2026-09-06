@@ -2,6 +2,8 @@ steps:
   # install dependencies
   - name: python:3.13-slim
     entrypoint: bash
+    env:
+      - "PYTHONPATH=/workspace/dags"
     args:
       - -c
       - |
