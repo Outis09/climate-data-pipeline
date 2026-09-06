@@ -6,7 +6,7 @@ def dagbag():
     return DagBag(dag_folder="/opt/airflow/dags")
 
 def test_dag_loaded(dagbag):
-    dag = dagbag.get_dag(dag_id='climate')
+    dag = dagbag.dags['climate']
     assert dagbag.import_errors == {}
     assert dag is not None
     assert len(dag.tasks) == 15
@@ -20,7 +20,7 @@ def assert_dag_dict_equal(source, dag):
 
 
 def test_dag(dagbag):
-    dag = dagbag.get_dag(dag_id='climate')
+    dag = dagbag.dags['climate']
     assert_dag_dict_equal(
         {
             "aggregate_hourly_air_quality": ['validate_air_quality_pre_load'],
