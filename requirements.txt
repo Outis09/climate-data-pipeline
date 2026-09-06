@@ -4,3 +4,4 @@ openmeteo_requests
 great_expectations
 google-auth
 google-cloud-monitoring
+cloudpathlib
