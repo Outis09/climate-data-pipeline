@@ -292,3 +292,13 @@ resource "google_monitoring_metric_descriptor" "historical_years_processed" {
         description = "Year of the historical data processed"
     }
 }
+
+resource "google_monitoring_metric_descriptor" "historical_years_requested" {
+    description = "Number of historical years requested"
+    display_name = "Historical Years Requested"
+    type = "custom.googleapis.com/pipeline/historical/years_requested"
+    metric_kind = "GAUGE"
+    value_type = "DOUBLE"
+
+}
+
