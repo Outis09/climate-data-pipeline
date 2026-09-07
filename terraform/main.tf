@@ -168,6 +168,10 @@ resource "google_composer_environment" "climate_data_environment" {
     software_config {
       image_version = "composer-3-airflow-3.2.2-build.2"
 
+      airflow_config_overrides = {
+        core-load_examples = "False"
+      }
+
       pypi_packages = {
       requests-cache = ">=1.3.3"
       retry-requests = ">=2.0.0"
