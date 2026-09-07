@@ -139,3 +139,24 @@ if ! gcloud builds triggers create github \
     echo "Error creating Cloud Build trigger for presubmit checks. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
     exit 1
  fi
+
+
+ADD_DAGS_TO_COMPOSER_SERVICE_ACCOUNT_EMAIL=$(terraform output -raw cloud_build_add_dags_to_composer_sa)
+ADD_DAGS_TO_COMPOSER_SERVICE_ACCOUNT="projects/${PROJECT_ID}/serviceAccounts/${ADD_DAGS_TO_COMPOSER_SERVICE_ACCOUNT_EMAIL}"
+DAGS_BUCKET_NAME=$(echo "$DAG_GCS_PREFIX" | sed -E 's|^gs://([^/]+)/.*|\1|')
+_DAGS_BUCKET=$(echo "$DAGS_BUCKET_NAME" | sed -E 's|/dags/?$||')
+
+DAGS_BUCKET_NAME=$(echo "$DAGS_BUCKET" | sed -E 's|^gs://([^/]+)/.*|\1|')
+# create cloud build trigger for add_dags_to_composer trigger
+if ! gcloud builds triggers create github \
+    --project="$PROJECT_ID" \
+    --name="add-dags-to-composer" \
+    --repository=projects/"$PROJECT_ID"/locations/"$LOCATION"/connections/"$GITHUB_CONNECTION_NAME"/repositories/climate-data-pipeline \
+    --branch-pattern="^main$" \
+    --build-config="add-dags-to-composer.cloudbuild.yaml" \
+    --region="$LOCATION"  \
+    --service-account="$ADD_DAGS_TO_COMPOSER_SERVICE_ACCOUNT" \
+    --substitutions=_DAGS_DIRECTORY="dags/",_DAGS_BUCKET=${_DAGS_BUCKET}  2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error creating Cloud Build trigger for add_dags_to_composer. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+ fi
