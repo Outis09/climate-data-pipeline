@@ -3,13 +3,15 @@ from airflow.dag_processing.dagbag import DagBag
 
 @pytest.fixture()
 def dagbag():
-    return DagBag(dag_folder="/opt/airflow/dags")
+    return DagBag(dag_folder="dags")
 
 def test_dag_loaded(dagbag):
-    dag = dagbag.get_dag(dag_id='historical_backfill')
-    assert dagbag.import_errors == {}
+    assert dagbag.import_errors == {}, dagbag.import_errors
+    dag = dagbag.dags['historical_backfill']
+    # assert dagbag.import_errors == {}
     assert dag is not None
     assert len(dag.tasks) == 18
+    
 
 def assert_dag_dict_equal(source, dag):
     assert dag.task_dict.keys() == source.keys()
@@ -20,7 +22,7 @@ def assert_dag_dict_equal(source, dag):
 
 
 def test_dag(dagbag):
-    dag = dagbag.get_dag(dag_id='historical_backfill')
+    dag = dagbag.dags['historical_backfill']
     assert_dag_dict_equal(
         {
             "air_quality_pipeline.backfill_air_quality": ['air_quality_pipeline.consolidate_daily_air_quality'],

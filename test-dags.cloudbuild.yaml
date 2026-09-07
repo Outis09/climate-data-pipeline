@@ -2,12 +2,14 @@ steps:
   # install dependencies
   - name: python:3.13-slim
     entrypoint: bash
+    env:
+      - "PYTHONPATH=/workspace/dags"
     args:
-      - c
+      - -c
       - |
         pip install -r requirements.txt
         pip install -r requirements-test.txt
-        python -m pytest -s dags/ 
+        python -m pytest -s tests/ 
 #     ["install", "-r", "requirements.txt",  "--user"]
 
 # # "-c", "constraints.txt",

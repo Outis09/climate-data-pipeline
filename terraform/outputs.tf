@@ -49,3 +49,7 @@ output "cloud_build_presubmit_service_account" {
 output "github_repository_name" {
     value = var.repository_name
 }
+
+output "cloud_build_add_dags_to_composer_sa" {
+    value = google_service_account.add_dags_to_composer_on_push_service_account.email
+}

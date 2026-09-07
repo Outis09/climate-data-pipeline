@@ -4,6 +4,7 @@ from airflow.sdk import BaseOperator, Context
 from airflow.sdk.observability import stats
 from airflow.providers.standard.triggers.temporal import TimeDeltaTrigger
 from airflow.sdk.exceptions import AirflowException
+from utils.metrics import emit_cumulative
 
 class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
     """A custom operator, built using the BaseOperator, that defers an Open Meteo extraction task for 24 hours when the daily API limit is exceeded."""
@@ -49,8 +50,24 @@ class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
                 else:
                     raise AirflowException(error)
 
-
-                stats.incr(stat="pipeline.open_meteo_api_rate_limit_hits", count=1, tags={"limit_type": limit})
+                # self.dag_id
+                # run_id =  context['run_id']
+                try:
+                    ti = context['ti']
+                    # ti.tr
+                    
+                    # stats.incr(stat="pipeline.open_meteo_api_rate_limit_hits", count=1, tags={"limit_type": limit})
+                    emit_cumulative(metric_name="pipeline/global/open_meteo_api_rate_limit_hits",
+                                    value=1,
+                                    labels={'limit_type':limit},
+                                    dag_id=ti.dag_id,
+                                    start_time=ti.start_date,
+                                    run_id=ti.run_id,
+                                    task_id=ti.task_id,
+                                    map_index=ti.map_index,
+                                    try_number=ti.try_number)
+                except KeyError:
+                    pass
 
                 self.defer(
                 trigger=TimeDeltaTrigger(delay),

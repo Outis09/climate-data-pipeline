@@ -272,3 +272,74 @@ resource "google_project_iam_member" "cloudbuild_sa_log_accessor" {
   member   = format("serviceAccount:%s", google_service_account.cloud_build_service_account.email)
   role     = "roles/logging.logWriter"
 }
+
+// service account for activate-on-push-to-main cloud build trigger
+resource "google_service_account" "add_dags_to_composer_on_push_service_account" {
+  provider = google-beta
+  account_id   = "add-dags-to-composer-sa"
+  display_name = "Add Dags to Composer on Push Service Account"
+}
+
+resource "google_project_iam_member" "add_dags_to_composer_on_push_sa_builder" {
+  project  = var.project_id
+  member   = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account.email)
+  role     = "roles/cloudbuild.builds.builder"
+}
+
+resource "google_project_iam_member" "add_dags_to_composer_on_push_sa_log_accessor" {
+  project  = var.project_id
+  member   = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account.email)
+  role     = "roles/logging.logWriter"
+}
+
+resource "google_storage_bucket_iam_member" "add_dags_to_composer_on_push_sa_bucket_access" {
+  bucket = split("/", replace(google_composer_environment.climate_data_environment.config[0].dag_gcs_prefix, "gs://", ""))[0]
+  role   = "roles/storage.objectAdmin"
+  member = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account.email)
+}
+
+resource "google_monitoring_metric_descriptor" "historical_years_processed" {
+    project = var.project_id
+    description = "Number of historical years processed"
+    display_name = "Historical Years Processed"
+    type = "custom.googleapis.com/pipeline/historical/years_processed"
+    metric_kind = "GAUGE"
+    value_type = "DOUBLE"
+
+    labels {
+        key = "source"
+        value_type = "STRING"
+        description = "Source of the historical data (climate or air quality or land surface)"
+    }
+
+    labels {
+        key = "year"
+        value_type = "INT64"
+        description = "Year of the historical data processed"
+    }
+}
+
+resource "google_monitoring_metric_descriptor" "historical_years_requested" {
+    project = var.project_id
+    description = "Number of historical years requested"
+    display_name = "Historical Years Requested"
+    type = "custom.googleapis.com/pipeline/historical/years_requested"
+    metric_kind = "GAUGE"
+    value_type = "DOUBLE"
+
+}
+
+resource "google_monitoring_metric_descriptor" "open_meteo_api_rate_limit_hits" {
+    project = var.project_id
+    description = "Number of times the Open Meteo API rate limit was hit"
+    display_name = "Open Meteo API Rate Limit Hits"
+    type = "custom.googleapis.com/pipeline/global/open_meteo_api_rate_limit_hits"
+    metric_kind = "CUMULATIVE"
+    value_type = "INT64"
+
+    labels {
+        key = "limit_type"
+        value_type = "STRING"
+        description = "Type of rate limit hit"
+    }
+}
