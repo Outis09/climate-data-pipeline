@@ -25,6 +25,14 @@ The project supports both **local deployment** using **Docker** and **PostgreSQL
 
 ## Architecture
 
+### Cloud Deployment
+![Cloud Deployment Architecture](<images/Climate Data Pipeline - Cloud Deployment.jpg>)
+
+
+### Data Pipeline Flow
+![Data Pipeline Flow](<images/Climate Data Pipeline Flow.jpg>)
+
+
 
 ## Technology Stack
 
@@ -265,7 +273,7 @@ The primary analytical tables are:
 
 Environmental tables use (`date`, `city_id`) as their logical record key.
 
-![alt text](<climate erd.png>)
+<img src="images/climate erd.png" width=600 height=600> 
 
 
 ## Deployment
@@ -290,3 +298,6 @@ Environmental tables use (`date`, `city_id`) as their logical record key.
 - [Prometheus StatsD Integration Example](https://github.com/slok/prometheus-statsd-integration-example/tree/master)
 - [Apache Airflow: Or How to Stop Running Cron Jobs and Start Having More Professional Problems](https://www.linkedin.com/pulse/apache-airflow-how-stop-running-cron-jobs-start-more-abadia-lopez-loxae/)
 - [GCP BigQuery UPSERT Using Python API Client](https://medium.com/@chandan3611/gcp-bigquery-upsert-using-python-api-client-edd8fa485677)
+- [How to implement custom monitoring metrics using the Google Cloud Monitoring API](https://oneuptime.com/blog/post/2026-02-17-how-to-implement-custom-monitoring-metrics-using-the-google-cloud-monitoring-api/view)
+
+- [How to Create Custom Metrics in Cloud Monitoring Using the API](https://oneuptime.com/blog/post/2026-02-17-how-to-create-custom-metrics-in-cloud-monitoring-using-the-api/view#writing-cumulative-metrics)
