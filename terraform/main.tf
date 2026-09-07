@@ -273,6 +273,31 @@ resource "google_project_iam_member" "cloudbuild_sa_log_accessor" {
   role     = "roles/logging.logWriter"
 }
 
+// service account for activate-on-push-to-main cloud build trigger
+resource "google_service_account" "add_dags_to_composer_on_push_service_account" {
+  provider = google-beta
+  account_id   = "add-dags-to-composer-sa"
+  display_name = "Add Dags to Composer on Push Service Account"
+}
+
+resource "google_project_iam_member" "add_dags_to_composer_on_push_sa_builder" {
+  project  = var.project_id
+  member   = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account.email)
+  role     = "roles/cloudbuild.builds.builder"
+}
+
+resource "google_project_iam_member" "add_dags_to_composer_on_push_sa_log_accessor" {
+  project  = var.project_id
+  member   = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account.email)
+  role     = "roles/logging.logWriter"
+}
+
+resource "google_storage_bucket_iam_member" "add_dags_to_composer_on_push_sa_bucket_access" {
+  bucket = split("/", replace(google_composer_environment.climate_data_environment.config[0].dag_gcs_prefix, "gs://", ""))[0]
+  role   = "roles/storage.objectAdmin"
+  member = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account.email)
+}
+
 resource "google_monitoring_metric_descriptor" "historical_years_processed" {
     project = var.project_id
     description = "Number of historical years processed"
