@@ -7,10 +7,10 @@ from airflow.timetables.interval import CronDataIntervalTimetable
 from airflow.providers.smtp.notifications.smtp import SmtpNotifier
 from airflow.sdk.exceptions import AirflowException
 from datetime import datetime, timedelta
-from utils.db import load_data, extract_cities
-from utils.extract import extract_daily_climate, extract_daily_air_quality, extract_daily_land_surface
-from utils.transform import agg_hourly_air_quality, transform_daily_climate_chunks, transform_daily_land_surface
-from utils.validate import run_validation
+# from utils.db import load_data, extract_cities
+from utils.extract import extract_daily_climate, extract_daily_air_quality
+# from utils.transform import agg_hourly_air_quality, transform_daily_climate_chunks, transform_daily_land_surface
+# from utils.validate import run_validation
 from utils.custom.operators import QuotaAwareOpenMeteoExtractionOperator
 
 
@@ -78,6 +78,7 @@ with DAG(
 
     @task
     def get_cities() -> list[str]:
+        from utils.db import extract_cities
         chunk_paths = extract_cities()
         return chunk_paths
 
@@ -99,6 +100,7 @@ with DAG(
 
     @task(pool="nasa_power_extraction_pool")
     def fetch_daily_land_surface(parquet_chunk_path, **context):
+        from utils.extract import extract_daily_land_surface
         start_date = context['data_interval_start'] - timedelta(days=2)
         start_date = start_date.strftime('%Y-%m-%d')
         # end_date = context['data_interval_end'].strftime('%Y-%m-%d')
@@ -107,22 +109,26 @@ with DAG(
 
     @task
     def aggregate_hourly_air_quality(parquet_paths,**context):
+        from utils.transform import agg_hourly_air_quality
         parquet_path = agg_hourly_air_quality(parquet_paths)
         return parquet_path
     
     @task
     def consolidate_daily_climate_chunks(parquet_paths, **context):
+        from utils.transform import transform_daily_climate_chunks
         consolidated_loc = transform_daily_climate_chunks(raw_parquet_paths=parquet_paths)
         return consolidated_loc
 
 
     @task
     def consolidate_daily_land_surface(parquet_paths, **context):
+        from utils.transform import transform_daily_land_surface
         trnasformed_loc = transform_daily_land_surface(raw_parquet_paths=parquet_paths)
         return trnasformed_loc
 
     @task
     def validate_data(parquet_path, api_source, **context):
+        from utils.validate import run_validation
         validated_paths = []
         for path in parquet_path:
             validated_path = run_validation(parquet_path=path, api_source=api_source)
@@ -133,6 +139,7 @@ with DAG(
         
     @task(pool="db_upsert_pool", retries=0)
     def upsert_data(parquet_paths, table_name, **context):
+        from utils.db import load_data
         load_data(parquet_paths, table_name, **context)
         return None
          
