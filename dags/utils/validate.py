@@ -19,9 +19,9 @@ def run_validation(api_source, parquet_path):
         run_date = datetime.strptime(run_date, '%Y-%m-%d')
     except TypeError:
         pass
-    year = str(run_date.year)
-    month = str(run_date.strftime("%m"))
-    day = str(run_date.strftime("%d"))
+    year = run_date.year # str(run_date.year)
+    month = run_date.month # str(run_date.strftime("%m"))
+    day =  run_date.day #str(run_date.strftime("%d"))
 
     checkpoint = gx_context.checkpoints.get(f"daily_{api_source}_checkpoint") 
     daily_batch_parameters = {"year":year,
