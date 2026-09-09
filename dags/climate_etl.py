@@ -15,60 +15,62 @@ from utils.custom.operators import QuotaAwareOpenMeteoExtractionOperator
 
 
 
-# task_fail_notify = SmtpNotifier(
-#         to="sshakurace@gmail.com",
-#         subject="Airflow Failure: {{ ti.task_id }} in {{ dag.dag_id }}",
-#         html_content="""
-#     <h3>Task Failure Alert</h3>
-#     <p><b>DAG:</b> {{ "".join(dag.dag_id) }}</p>
-#     <p><b>Task:</b> {{ ti.task_id }}</p>
-#     <p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
-#     <p><b>Error Message:</b></p>
-#     <pre style="color: #721c24;">
-#     {{ exception }}
-#     </pre>
-#     <p><a href="{{ ti.log_url }}">Click here to view full Airflow logs</a></p>
+task_fail_notify = SmtpNotifier(
+        smtp_conn_id="smtp_default",
+        to="sshakurace@gmail.com",
+        subject="Airflow Failure: {{ ti.task_id }} in {{ dag.dag_id }}",
+        html_content="""
+    <h3>Task Failure Alert</h3>
+    <p><b>DAG:</b> {{ "".join(dag.dag_id) }}</p>
+    <p><b>Task:</b> {{ ti.task_id }}</p>
+    <p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
+    <p><b>Error Message:</b></p>
+    <pre style="color: #721c24;">
+    {{ exception }}
+    </pre>
+    <p><a href="{{ ti.log_url }}">Click here to view full Airflow logs</a></p>
     
-# """
-#     )
+"""
+    )
 
-# dag_success_notify = SmtpNotifier(
-#     to="sshakurace@gmail.com",
-#     subject="Airflow Success | {{ dag.dag_id }} | {{ dag_run.run_id }} ",
-#     html_content="""
-# <h3 style="color: #155724;">DAG Completed Successfully</h3>
+dag_success_notify = SmtpNotifier(
+    smtp_conn_id="smtp_default",
+    to="sshakurace@gmail.com",
+    subject="Airflow Success | {{ dag.dag_id }} | {{ dag_run.run_id }} ",
+    html_content="""
+<h3 style="color: #155724;">DAG Completed Successfully</h3>
 
-# <p><b>DAG:</b> {{ dag.dag_id }}</p>
-# <p><b>Run ID:</b> {{ dag_run.run_id }}</p>
-# <p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
-# <p><b>Status:</b>
-#     <span style="color: #155724; font-weight: bold;">
-#         SUCCESS
-#     </span>
-# </p>
+<p><b>DAG:</b> {{ dag.dag_id }}</p>
+<p><b>Run ID:</b> {{ dag_run.run_id }}</p>
+<p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
+<p><b>Status:</b>
+    <span style="color: #155724; font-weight: bold;">
+        SUCCESS
+    </span>
+</p>
 
-# <div style="color: #155724;">
-#     All tasks in this DAG completed successfully.
-# </div>
+<div style="color: #155724;">
+    All tasks in this DAG completed successfully.
+</div>
 
-# <p>
-#     <a href="{{ ti.log_url }}">Click here to view the Airflow logs</a>
-# </p>
-# """
-# )
+<p>
+    <a href="{{ ti.log_url }}">Click here to view the Airflow logs</a>
+</p>
+"""
+)
 
-# default_args = {
-#     "owner": "airflow",
-#     "retries": 0,
-#     "on_failure_callback": task_fail_notify
-# }
+default_args = {
+    "owner": "airflow",
+    "retries": 0,
+    "on_failure_callback": task_fail_notify
+}
 
 
 
 with DAG(
     dag_id = 'climate',
-    #on_success_callback=dag_success_notify,
-    #default_args=default_args,
+    on_success_callback=dag_success_notify,
+    default_args=default_args,
     start_date=pendulum.datetime(2026, 1 , 1, tz='UTC'),
     schedule=CronDataIntervalTimetable("@daily", timezone='UTC'),
     catchup=False,):
