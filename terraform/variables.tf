@@ -91,3 +91,9 @@ variable "enable_ci_cd" {
   type        = bool
   default     = false
 }
+
+variable "user_email" {
+  description = "The email of the user for receiving notifications about pipeline failures/success"
+  type        = string
+  default     = ""
+}

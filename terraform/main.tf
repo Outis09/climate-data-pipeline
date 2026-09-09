@@ -45,6 +45,13 @@ resource "google_project_iam_member" "composer_bigquery_read_session" {
   member = "serviceAccount:${google_service_account.climate_pipeline_service_account.email}"
 }
 
+# add secretmanager.secretAccessor role to the service account
+resource "google_project_iam_member" "climate_pipeline_service_account_secret_accessor" {
+  project  = var.project_id
+  member   = format("serviceAccount:%s", google_service_account.climate_pipeline_service_account.email)
+  role     = "roles/secretmanager.secretAccessor"
+}
+
 
 resource "google_bigquery_dataset" "climate_data" {
   provider = google-beta
@@ -168,6 +175,14 @@ resource "google_composer_environment" "climate_data_environment" {
     software_config {
       image_version = "composer-3-airflow-3.2.2-build.2"
 
+      airflow_config_overrides = {
+        core-dags_are_paused_at_creation = "true"
+        # core-load_examples = "false"
+        core-default_timezone = "utc"
+        secrets-backend = "airflow.providers.google.cloud.secrets.secret_manager.CloudSecretManagerBackend"
+        email-email_backend = "airflow.utils.email.send_email_smtp"
+      }
+
       pypi_packages = {
       requests-cache = ">=1.3.3"
       retry-requests = ">=2.0.0"
@@ -182,6 +197,7 @@ resource "google_composer_environment" "climate_data_environment" {
       BQ_DATASET_NAME = var.bigquery_dataset_name
       STORAGE_BACKEND = "gcs"
       CLIMATE_COUNTRY = var.climate_country
+      START_DATE = var.historical_data_start_date
     }
     }
 
