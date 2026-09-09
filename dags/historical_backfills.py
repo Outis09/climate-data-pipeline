@@ -3,11 +3,11 @@ from datetime import datetime
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.timetables.interval import CronDataIntervalTimetable
 from airflow.sdk.observability import stats
-from utils.extract import extract_daily_land_surface, extract_daily_air_quality, extract_daily_climate
+from utils.extract import extract_daily_air_quality, extract_daily_climate
 from utils.db import extract_cities, load_data
-from utils.transform import transform_daily_climate_chunks, transform_daily_land_surface, agg_hourly_air_quality
-from utils.validate import run_validation
-from utils.metrics import emit_gauge
+# from utils.transform import transform_daily_climate_chunks, transform_daily_land_surface, agg_hourly_air_quality
+# from utils.validate import run_validation
+# from utils.metrics import emit_gauge
 from utils.custom.operators import QuotaAwareOpenMeteoExtractionOperator
 
 
@@ -22,6 +22,7 @@ with DAG(
     def get_periods(**context):
         import os
         from datetime import datetime, timedelta
+        from utils.metrics import emit_gauge
         start_date = datetime.strptime(os.getenv('START_DATE'), '%Y-%m-%d')
         end_date = datetime.now() - timedelta(days=2)
 
@@ -47,6 +48,7 @@ with DAG(
 
     @task
     def backfill_period_land_surface(period, cities_chunk_paths, **context):
+        from utils.extract import extract_daily_land_surface
         start_date = period[0]
         end_date = period[1]
 
@@ -58,21 +60,25 @@ with DAG(
 
     @task
     def consolidate_daily_land_surface(parquet_paths):
+        from utils.transform import transform_daily_land_surface
         transformed_loc = transform_daily_land_surface(parquet_paths)
         return transformed_loc
 
     @task
     def consolidate_daily_climate_chunks(parquet_paths):
+        from utils.transform import transform_daily_climate_chunks
         consolidated_loc = transform_daily_climate_chunks(parquet_paths)
         return consolidated_loc
 
     @task
     def consolidate_daily_air_quality(parquet_paths):
+        from utils.transform import agg_hourly_air_quality
         consolidated_loc = agg_hourly_air_quality(raw_parquet_paths=parquet_paths)
         return consolidated_loc
 
     @task
     def validate_data(parquet_path, api_source, **context):
+        from utils.validate import run_validation
         validated_paths = []
         for path in parquet_path:
             validated_path = run_validation(parquet_path=path, api_source=api_source)
@@ -82,11 +88,13 @@ with DAG(
 
     @task(pool="db_upsert_pool")
     def upsert_data(parquet_paths, table_name, **context):
+        from utils.db import load_data
         processed_date = load_data(parquet_paths, table_name, **context)
         return processed_date
 
     @task
     def emit_year_processed_metric(processed_date, metric_name):
+        from utils.metrics import emit_gauge
         try:
             processed_date = datetime.strptime(processed_date, '%Y-%m-%d')
         except:
