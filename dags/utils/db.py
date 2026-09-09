@@ -8,6 +8,7 @@ import os
 from utils.helpers import get_data_path
 import re
 from decimal import Decimal, ROUND_HALF_UP
+from cloudpathlib import GSPath
 
 
 
@@ -162,7 +163,7 @@ def bq_upsert_tables(parquet_path, table_name, run_id):
     target_table = f"{dataset}.{table_name}"
     staging_table = f"{dataset}.{table_name}_{run_id}_staging"
 
-    df_list = [pd.read_parquet(parquet_path) for path in parquet_path]
+    df_list = [pd.read_parquet(GSPath(path)) for path in parquet_path]
     df = pd.concat(df_list, ignore_index=True)
     df['date'] = pd.to_datetime(df['date']).dt.date
 

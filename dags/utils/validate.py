@@ -3,17 +3,20 @@ import pandas as pd
 from datetime import datetime
 from airflow.sdk.exceptions import AirflowException
 import os
+from cloudpathlib import GSPath
 
 def run_validation(api_source, parquet_path):
     storage_type = os.getenv('STORAGE_BACKEND')
     if storage_type == 'local':
         gx_root = '/opt/airflow/include/gx'
+        df = pd.read_parquet(parquet_path, engine='pyarrow')
     else:
-        bucket = os.getenv('BUCKET_NAME')
+        # bucket = os.getenv('BUCKET_NAME')
         gx_root = f'/home/airflow/gcs/data/gx'
+        df = pd.read_parquet(GSPath(parquet_path), engine='pyarrow')
     gx_context = gx.get_context(project_root_dir=gx_root)
 
-    df = pd.read_parquet(parquet_path, engine='pyarrow')
+    # df = pd.read_parquet(parquet_path, engine='pyarrow')
     run_date = df['date'].iloc[0]
     try:
         run_date = datetime.strptime(run_date, '%Y-%m-%d')
