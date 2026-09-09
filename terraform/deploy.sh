@@ -126,19 +126,25 @@ GITHUB_CONNECTION_NAME=$(terraform output -raw github_connection_name)
 SERVICE_ACCOUNT_EMAIL=$(terraform output -raw cloud_build_presubmit_service_account)
 SERVICE_ACCOUNT="projects/${PROJECT_ID}/serviceAccounts/${SERVICE_ACCOUNT_EMAIL}"
 
+# check if the trigger already exists
+if gcloud builds triggers list --region="$LOCATION" --filter="name=presubmit-checks" | grep -q "presubmit-checks"; then
+    echo "Cloud Build trigger for presubmit checks already exists. Skipping creation." | tee -a "$LOG_FILE"
+else
+    echo "Creating Cloud Build trigger for presubmit checks..." | tee -a "$LOG_FILE"
 # create cloud build trigger for presubmit checks
-if ! gcloud builds triggers create github \
-    --project="$PROJECT_ID" \
-    --name="presubmit-checks" \
-    --repository=projects/"$PROJECT_ID"/locations/"$LOCATION"/connections/"$GITHUB_CONNECTION_NAME"/repositories/climate-data-pipeline \
-    --pull-request-pattern="^main$" \
-    --build-config="test-dags.cloudbuild.yaml" \
-    --region="$LOCATION"  \
-    --service-account="$SERVICE_ACCOUNT" \
-    --comment-control="COMMENTS_DISABLED"  2>&1 | tee -a "$LOG_FILE"; then
-    echo "Error creating Cloud Build trigger for presubmit checks. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
-    exit 1
- fi
+    if ! gcloud builds triggers create github \
+        --project="$PROJECT_ID" \
+        --name="presubmit-checks" \
+        --repository=projects/"$PROJECT_ID"/locations/"$LOCATION"/connections/"$GITHUB_CONNECTION_NAME"/repositories/climate-data-pipeline \
+        --pull-request-pattern="^main$" \
+        --build-config="test-dags.cloudbuild.yaml" \
+        --region="$LOCATION"  \
+        --service-account="$SERVICE_ACCOUNT" \
+        --comment-control="COMMENTS_DISABLED"  2>&1 | tee -a "$LOG_FILE"; then
+        echo "Error creating Cloud Build trigger for presubmit checks. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+        exit 1
+    fi
+fi
 
 
 ADD_DAGS_TO_COMPOSER_SERVICE_ACCOUNT_EMAIL=$(terraform output -raw cloud_build_add_dags_to_composer_sa)
@@ -147,16 +153,23 @@ DAGS_BUCKET_NAME=$(echo "$DAG_GCS_PREFIX" | sed -E 's|^gs://([^/]+)/.*|\1|')
 _DAGS_BUCKET=$(echo "$DAGS_BUCKET_NAME" | sed -E 's|/dags/?$||')
 
 DAGS_BUCKET_NAME=$(echo "$DAGS_BUCKET" | sed -E 's|^gs://([^/]+)/.*|\1|')
-# create cloud build trigger for add_dags_to_composer trigger
-if ! gcloud builds triggers create github \
-    --project="$PROJECT_ID" \
-    --name="add-dags-to-composer" \
-    --repository=projects/"$PROJECT_ID"/locations/"$LOCATION"/connections/"$GITHUB_CONNECTION_NAME"/repositories/climate-data-pipeline \
-    --branch-pattern="^main$" \
-    --build-config="add-dags-to-composer.cloudbuild.yaml" \
-    --region="$LOCATION"  \
-    --service-account="$ADD_DAGS_TO_COMPOSER_SERVICE_ACCOUNT" \
-    --substitutions=_DAGS_DIRECTORY="dags/",_DAGS_BUCKET=${_DAGS_BUCKET}  2>&1 | tee -a "$LOG_FILE"; then
-    echo "Error creating Cloud Build trigger for add_dags_to_composer. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
-    exit 1
- fi
+
+# check if the trigger already exists
+if gcloud builds triggers list --region="$LOCATION" --filter="name=add-dags-to-composer" | grep -q "add-dags-to-composer"; then
+    echo "Cloud Build trigger for add_dags_to_composer already exists. Skipping creation." | tee -a "$LOG_FILE"
+else
+    echo "Creating Cloud Build trigger for add_dags_to_composer..." | tee -a "$LOG_FILE"
+    # create cloud build trigger for add_dags_to_composer trigger
+    if ! gcloud builds triggers create github \
+        --project="$PROJECT_ID" \
+        --name="add-dags-to-composer" \
+        --repository=projects/"$PROJECT_ID"/locations/"$LOCATION"/connections/"$GITHUB_CONNECTION_NAME"/repositories/climate-data-pipeline \
+        --branch-pattern="^main$" \
+        --build-config="add-dags-to-composer.cloudbuild.yaml" \
+        --region="$LOCATION"  \
+        --service-account="$ADD_DAGS_TO_COMPOSER_SERVICE_ACCOUNT" \
+        --substitutions=_DAGS_DIRECTORY="dags/",_DAGS_BUCKET=${_DAGS_BUCKET}  2>&1 | tee -a "$LOG_FILE"; then
+        echo "Error creating Cloud Build trigger for add_dags_to_composer. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+        exit 1
+    fi
+fi
