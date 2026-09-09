@@ -43,7 +43,7 @@ output "github_connection_name" {
 }
 
 output "cloud_build_presubmit_service_account" {
-    value = google_service_account.cloud_build_service_account.email
+    value = var.enable_ci_cd ? google_service_account.cloud_build_service_account[0].email : null
 }
 
 output "github_repository_name" {
@@ -51,5 +51,5 @@ output "github_repository_name" {
 }
 
 output "cloud_build_add_dags_to_composer_sa" {
-    value = google_service_account.add_dags_to_composer_on_push_service_account.email
+    value = var.enable_ci_cd ? google_service_account.add_dags_to_composer_on_push_service_account[0].email : null
 }

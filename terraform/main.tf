@@ -205,6 +205,7 @@ resource "google_composer_environment" "climate_data_environment" {
 
 // Create a secret containing the personal access token and grant permissions to the Service Agent
 resource "google_secret_manager_secret" "github_token_secret" {
+    count = var.enable_ci_cd ? 1 : 0
     project = var.project_id
     secret_id = var.secret_id
 
@@ -214,7 +215,8 @@ resource "google_secret_manager_secret" "github_token_secret" {
 }
 
 resource "google_secret_manager_secret_version" "github_token_secret_version" {
-    secret = google_secret_manager_secret.github_token_secret.id
+    count = var.enable_ci_cd ? 1 : 0
+    secret = google_secret_manager_secret.github_token_secret[0].id
     secret_data = var.github_pat
 }
 
@@ -226,13 +228,15 @@ data "google_iam_policy" "serviceagent_secretAccessor" {
 }
 
 resource "google_secret_manager_secret_iam_policy" "policy" {
-  project = google_secret_manager_secret.github_token_secret.project
-  secret_id = google_secret_manager_secret.github_token_secret.secret_id
+  count = var.enable_ci_cd ? 1 : 0
+  project = google_secret_manager_secret.github_token_secret[0].project
+  secret_id = google_secret_manager_secret.github_token_secret[0].secret_id
   policy_data = data.google_iam_policy.serviceagent_secretAccessor.policy_data
 }
 
 // Create the GitHub connection
 resource "google_cloudbuildv2_connection" "github_connection" {
+    count = var.enable_ci_cd ? 1 : 0
     project = var.project_id
     location = var.region
     name = var.connection_name
@@ -240,62 +244,70 @@ resource "google_cloudbuildv2_connection" "github_connection" {
     github_config {
         app_installation_id = var.installation_id
         authorizer_credential {
-            oauth_token_secret_version = google_secret_manager_secret_version.github_token_secret_version.id
+            oauth_token_secret_version = google_secret_manager_secret_version.github_token_secret_version[0].id
         }
     }
     depends_on = [google_secret_manager_secret_iam_policy.policy]
 }
 
     resource "google_cloudbuildv2_repository" "my_repository" {
+      count = var.enable_ci_cd ? 1 : 0
       project = var.project_id
       location = var.region
       name = var.repository_name
-      parent_connection = google_cloudbuildv2_connection.github_connection.name
+      parent_connection = google_cloudbuildv2_connection.github_connection[0].name
       remote_uri = var.remote_uri
   }
 
 // service account for cloud build triggers
 resource "google_service_account" "cloud_build_service_account" {
+  count = var.enable_ci_cd ? 1 : 0
   provider = google-beta
   account_id   = "cloud-build-service-account"
   display_name = "Cloud Build Service Account"
 }
 
 resource "google_project_iam_member" "cloudbuild_sa_builder" {
+  count = var.enable_ci_cd ? 1 : 0
   project  = var.project_id
-  member   = format("serviceAccount:%s", google_service_account.cloud_build_service_account.email)
+  member   = format("serviceAccount:%s", google_service_account.cloud_build_service_account[0].email)
   role     = "roles/cloudbuild.builds.builder"
 }
 
 resource "google_project_iam_member" "cloudbuild_sa_log_accessor" {
+  count = var.enable_ci_cd ? 1 : 0
   project  = var.project_id
-  member   = format("serviceAccount:%s", google_service_account.cloud_build_service_account.email)
+  member   = format("serviceAccount:%s", google_service_account.cloud_build_service_account[0].email)
   role     = "roles/logging.logWriter"
 }
 
 // service account for activate-on-push-to-main cloud build trigger
 resource "google_service_account" "add_dags_to_composer_on_push_service_account" {
+  count = var.enable_ci_cd ? 1 : 0
   provider = google-beta
   account_id   = "add-dags-to-composer-sa"
   display_name = "Add Dags to Composer on Push Service Account"
 }
 
 resource "google_project_iam_member" "add_dags_to_composer_on_push_sa_builder" {
+  count = var.enable_ci_cd ? 1 : 0
   project  = var.project_id
-  member   = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account.email)
+  member   = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account[0].email)
   role     = "roles/cloudbuild.builds.builder"
 }
 
 resource "google_project_iam_member" "add_dags_to_composer_on_push_sa_log_accessor" {
+  count = var.enable_ci_cd ? 1 : 0
   project  = var.project_id
-  member   = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account.email)
+  member   = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account[0].email)
   role     = "roles/logging.logWriter"
 }
 
 resource "google_storage_bucket_iam_member" "add_dags_to_composer_on_push_sa_bucket_access" {
+  count = var.enable_ci_cd ? 1 : 0
   bucket = split("/", replace(google_composer_environment.climate_data_environment.config[0].dag_gcs_prefix, "gs://", ""))[0]
   role   = "roles/storage.objectAdmin"
-  member = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account.email)
+  member = format("serviceAccount:%s", google_service_account.add_dags_to_composer_on_push_service_account[0].email)
 }
 
 resource "google_monitoring_metric_descriptor" "historical_years_processed" {
