@@ -25,6 +25,23 @@ fi
 
 echo "Terraform deployment completed successfully." | tee -a "$LOG_FILE"
 
+echo "Configuring SMTP settings for receiving emails..." | tee -a "$LOG_FILE"
+# read user email password
+USER_EMAIL=$(terraform output -raw user_email)
+SMTP_EMAIL="${USER_EMAIL//@/%40}"
+read -sp "Enter the app password for $USER_EMAIL: " USER_PASSWORD
+SMTP_DEFAULT="smtp://${SMTP_EMAIL}:${USER_PASSWORD}@smtp.gmail.com:587?disable_ssl=true&from_email=${SMTP_EMAIL}"
+if ! gcloud secrets describe airflow-connections-smtp_default --quiet 2>/dev/null; then
+    echo "Creating secret for SMTP settings..." | tee -a "$LOG_FILE"
+else
+    echo "Secret for SMTP settings already exists. Updating it..." | tee -a "$LOG_FILE"
+    gcloud secrets delete airflow-connections-smtp_default --quiet 2>&1 | tee -a "$LOG_FILE"
+fi
+echo -n "$SMTP_DEFAULT" | gcloud secrets create airflow-connections-smtp_default --data-file=- --replication-policy=automatic --quiet
+
+unset USER_PASSWORD
+unset SMTP_DEFAULT
+
 echo "Uploading dags..." | tee -a "$LOG_FILE"
 DAG_GCS_PREFIX=$(terraform output -raw dag_gcs_prefix)
 if gcloud storage rsync -r --exclude=".*__pycache__.*" ../dags/ "$DAG_GCS_PREFIX" --quiet 2>&1 | tee -a "$LOG_FILE"; then
@@ -37,8 +54,8 @@ LOCATION=$(terraform output -raw region)
 PROJECT_ID=$(terraform output -raw project_id)
 
 
-if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" pools set -- --include-deferred noaa_power_extraction_pool 4 "Pool for NOAA Power Extraction Tasks"  2>&1 | tee -a "$LOG_FILE"; then
-    echo "Error configuring NOAA Power Extraction Pool for Composer Environment. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" pools set -- --include-deferred nasa_power_extraction_pool 4 "Pool for NASA Power Extraction Tasks"  2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error configuring NASA Power Extraction Pool for Composer Environment. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
     exit 1
 fi
 

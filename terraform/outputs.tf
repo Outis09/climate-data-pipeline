@@ -53,3 +53,7 @@ output "github_repository_name" {
 output "cloud_build_add_dags_to_composer_sa" {
     value = var.enable_ci_cd ? google_service_account.add_dags_to_composer_on_push_service_account[0].email : null
 }
+
+output "user_email" {
+    value = var.user_email
+}
