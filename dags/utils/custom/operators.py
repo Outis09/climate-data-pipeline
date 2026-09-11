@@ -24,7 +24,10 @@ class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
         
             try:
                 result = self.python_callable(period=self.period, cities_chunk_path=parquet_path)
-                completed_paths.append(result)
+                if isinstance(result, str):
+                    completed_paths.append(result)
+                else:
+                    completed_paths.extend(result)
             except Exception as error:
                 if isinstance(error, dict):
                     reason = error.get("reason", "").lower()

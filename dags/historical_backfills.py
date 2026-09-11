@@ -9,11 +9,64 @@ from utils.db import extract_cities, load_data
 # from utils.validate import run_validation
 # from utils.metrics import emit_gauge
 from utils.custom.operators import QuotaAwareOpenMeteoExtractionOperator
+from airflow.providers.smtp.notifications.smtp import SmtpNotifier
 
+
+
+task_fail_notify = SmtpNotifier(
+        smtp_conn_id="smtp_default",
+        to="sshakurace@gmail.com",
+        subject="Airflow Failure: {{ ti.task_id }} in {{ dag.dag_id }}",
+        html_content="""
+    <h3>Task Failure Alert</h3>
+    <p><b>DAG:</b> {{ "".join(dag.dag_id) }}</p>
+    <p><b>Task:</b> {{ ti.task_id }}</p>
+    <p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
+    <p><b>Error Message:</b></p>
+    <pre style="color: #721c24;">
+    {{ exception }}
+    </pre>
+    <p><a href="{{ ti.log_url }}">Click here to view full Airflow logs</a></p>
+    
+"""
+    )
+
+dag_success_notify = SmtpNotifier(
+    smtp_conn_id="smtp_default",
+    to="sshakurace@gmail.com",
+    subject="Airflow Success | Historical Data Retrieval DAG Completed Successfully ",
+    html_content="""
+<h3 style="color: #155724;">DAG Completed Successfully</h3>
+
+<p><b>DAG:</b> {{ dag.dag_id }}</p>
+<p><b>Run ID:</b> {{ dag_run.run_id }}</p>
+<p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
+<p><b>Status:</b>
+    <span style="color: #155724; font-weight: bold;">
+        SUCCESS
+    </span>
+</p>
+
+<div style="color: #155724;">
+    All tasks in this DAG completed successfully.
+</div>
+
+<p>
+    <a href="{{ ti.log_url }}">Click here to view the Airflow logs</a>
+</p>
+"""
+)
+
+default_args = {
+    "owner": "airflow",
+    "retries": 0,
+    "on_failure_callback": task_fail_notify
+}
 
           
 with DAG(
     dag_id='historical_backfill',
+    default_args=default_args, 
     start_date=None,
     schedule=None,
     catchup=False
@@ -55,7 +108,7 @@ with DAG(
         parquet_chunk_paths = []
         for cities_chunk_path in cities_chunk_paths:
             parquet_chunk_path = extract_daily_land_surface(period=[start_date, end_date], cities_chunk_paths=cities_chunk_path)
-            parquet_chunk_paths.append(parquet_chunk_path)
+            parquet_chunk_paths.extend(parquet_chunk_path)
         return parquet_chunk_paths
 
     @task
@@ -73,7 +126,7 @@ with DAG(
     @task
     def consolidate_daily_air_quality(parquet_paths):
         from utils.transform import agg_hourly_air_quality
-        consolidated_loc = agg_hourly_air_quality(raw_parquet_paths=parquet_paths)
+        consolidated_loc = agg_hourly_air_quality(parquet_paths=parquet_paths)
         return consolidated_loc
 
     @task
