@@ -12,20 +12,25 @@
 
 ## Overview
 
-Climate Data Pipeline is a reproducible data pipeline that collects, processes, validates, and stores climate and environmental data for up to 100 of the most populated cities in a selected country.
+Climate Data Pipeline is an end-to-end data engineering project for ingesting, transforming, validating, and serving daily climate and environmental observations for cities at scale.
 
-The pipeline combines city metadata from [Simple Maps](https://simplemaps.com/data/world-cities) with climate, air-quality, river discharge, and land-surface observations from [Open Meteo](https://open-meteo.com/en/docs/climate-api) and [NASA Power](https://power.larc.nasa.gov/docs/services/api/temporal/daily/). 
+The pipeline combines city metadata from [Simple Maps](https://simplemaps.com/data/world-cities) with climate, air-quality, river discharge, and land-surface observations from [Open Meteo](https://open-meteo.com/en/docs/climate-api) and [NASA Power](https://power.larc.nasa.gov/docs/services/api/temporal/daily/). It orchestrates processing with Apache Airflow and accounts for API quotas, different source publication schedules, historical backfills, data-quality failures, and late-arriving observations before loading analysis-ready data into PostgreSQL locally or BigQuery in Google Cloud. 
+
+The project was designed to provide a reproducible way to consolidate climate and environmental observations from multiple public sources into datasets suitable for analysis, research, and modelling.
 
 The dataset includes parameters related to the **[Essential Climate Variables (ECV)](https://gcos.wmo.int/site/global-climate-observing-system-gcos/essential-climate-variables)** defined by the Global Climate Observing System. 
 
 The project supports both **local deployment** using **Docker** and **PostgreSQL** and cloud deployment on **Google Cloud Platform** using **Cloud Composer**, **Google Cloud Storage**, and **BigQuery.**
 
-## Objectives
-- Build a reliable and reproducible climate data pipeline for climate analysis, research, and modelling. that data scientists, data analysts, AI engineers, climate researchers, and non-governmental organizations can use for climate analysis and models. Built with African countries in mind because access to this data would otherwise require bureaucratic hurdles of going through national agencies.
 
 ## Architecture
 
 ### Cloud Deployment
+
+The cloud deployment uses Google Cloud Composer for Airflow orchestration, Google Cloud Storage for raw and transformed Parquet files, and BigQuery as the analytical warehouse.
+
+Infrastructure is provisioned through Terraform. Cloud Logging provides centralized task and scheduler logs, while Cloud Monitoring receives both platform and custom pipeline metrics.
+
 ![Cloud Deployment Architecture](<images/Climate Data Pipeline - Cloud Deployment.jpg>)
 
 
@@ -39,16 +44,18 @@ The project supports both **local deployment** using **Docker** and **PostgreSQL
 |Area|Technologies|
 |-------|--------|
 |Orchestration| Apache Airflow 3 (local), Google Cloud Managed Service for Apache Airflow|
-|Language| Python|
+|Programming Language| Python|
 |Data Processing| Pandas|
 |Data Quality| Great Expectations|
-|File Format| Apache Parquet|
+|Intermediate Format| Apache Parquet|
 |Local Database|PostgreSQL|
 |Cloud Warehouse| BigQuery|
-|Object Storage|Google Cloud Storage|
-|Infrastructure |Terraform|
-|Local Development| Docker, Docker Compose|
-|Monitoring| Prometheus & Grafana (local)|
+|Cloud Object Storage|Google Cloud Storage|
+|Infrastructure as Code|Terraform|
+|Local Runtime| Docker & Docker Compose|
+|Local Monitoring| Prometheus & Grafana|
+|Cloud Monitoring| Google Cloud Monitoring & Cloud Logging|
+|CI?CD| Google Cloud Build & GitHub| 
 |Deployment Automation| Bash|
 |External APIs| Open-Meteo, NASA POWER|
 
@@ -59,12 +66,27 @@ Open-Meteo provides climate, air-quality, and river-discharge data used by the p
 
 #### Climate
 Parameters include:
-- Temperature, cloud cover, humidity, precipitation, wind speed, rain, snowfall, shortwave radiation
+- temperature
+- cloud cover
+- humidity
+- precipitation
+- wind speed 
+- rain
+- snowfall
+- shortwave radiation
+
 #### Air Quality
 Parameters include: 
-- Particulate Matter, Carbon Dioxide, Ozone, Nitrogen Dioxide, Sulphur Dioxide
+- particulate matter (PM2.5, PM10)
+- carbon dioxide
+- ozone 
+- nitrogen dioxide
+- sulphur dioxide
+
+
 #### Flood 
-Parameters include: River Discharge
+Parameters include: 
+- river discharge
  
 #### Limitations:
 
@@ -119,7 +141,7 @@ The difference in publication latency is accounted for when scheduling extractio
 
 ### Simple Maps
 
-Simple Maps provides the city metadata required to determine extraction coordinates.
+Simple Maps provides the city metadata used to determine extraction locations.
 
 Fields used include:
 
@@ -130,11 +152,10 @@ Fields used include:
 - Population
 - Capital status
 
-The free Basic World Cities database contains approximately 50,000 cities.
+Cities are ranked by population and the pipeline processes up to the configured maximum number of locations for the selected country.
 
-Note: This project uses non-commercial access to the external data APIs. Users intending to use the pipeline commercially should review the licensing and commercial-use requirements of each data provider.
-        
-**NB:** This project used the non-commercial usage licence of these APIs, therefore for commercial use, users are advised to purchase the commercial licences before proceeding. 
+
+**Licensing**: This project was developed using non-commercial access to its external data sources. Anyone intending to use the project commercially should independently review the current licensing and commercial-use requirements of each provider.
 
 ## Data Pipeline
 
@@ -159,6 +180,8 @@ The daily DAG:
 
 Extraction dates are source-specific because Open-Meteo and NASA POWER datasets have different publication latencies.
 
+Airflow catchup is disabled for the daily workflow. Historical processing is handled by a separate backfill workflow.
+
 ### Historical Backfill DAG
 
 The historical DAG is responsible for retrieving historical data.
@@ -179,32 +202,35 @@ Airflow dynamically creates extraction tasks for these chunks rather than requir
 
 The resulting files are consolidated during transformation to create the dataset required for validation and loading.
 
-### Pools
+### Resource Pools
 
 Airflow Pools limit concurrent access to constrained external and internal resources.
 
 #### Database Upsert Pool
 
-Limits the number of concurrent database upsert operations to reduce unnecessary pressure on PostgreSQL or BigQuery loading operations.
+Limits concurrent database upsert operations to reduce  pressure on PostgreSQL or BigQuery.
 
 #### Open-Meteo Extraction Pool
 
-Limits the number of extraction tasks that can access Open-Meteo concurrently.
-
-Deferred tasks remain included in the pool. Therefore, when the available API quota has been exhausted, additional extraction tasks do not immediately continue sending requests to the same resource.
+Limits simultaneous access to Open-Meteo and works with quota-aware deferral to reduce repeated requests after quota exhaustion.
 
 #### NASA POWER Extraction Pool
-Limits the number of extraction tasks that can access NASA POWER concurrently.
+Restricts concurrent NASA POWER extraction.
+
+#### Task Prioritization
+Current daily ingestion is assigned higher scheduling priority than historical backfills.
+
+This allows large historical requests to run over an extended period without preventing current data from being processed.
 
 ### Deferrable Operators
 
-A custom quota-aware deferrable operator handles Open-Meteo API rate-limit responses.
+Open-Meteo extraction uses a custom Airflow operator built around Airflow deferral.
 
-When a quota is exhausted, the task is deferred to the Airflow triggerer instead of occupying a worker while waiting.
+When a rate-limit response is detected, the operator identifies the exhausted quota window and defers execution through the Airflow triggerer.
 
-Current deferral behaviour is:
+Current behaviour is:
 
-|API Limit|	Deferral
+|Limit|	Deferral
 |------|-------
 Minute limit|	1 minute
 Hour limit|	1 hour
@@ -224,20 +250,20 @@ Hourly air-quality observations are aggregated into daily observations before lo
 
 | Variable | Aggregation |
 |---|---|
-| PM2.5 | 24-hour average |
-| PM10 | 24-hour average |
-| Ozone | Max of 8-hour rolling average |
-| Carbon Monoxide | Max of 8-hour rolling average 
-| Nitrogen Dioxide | Daily aggregation |
-| Sulfur Dioxide | Daily aggregation | 
-Carbon Dioxide| Daily average
+| PM2.5 | Daily mean |
+| PM10 | Daily mean |
+| Ozone | Maximum 8-hour rolling mean |
+| Carbon Monoxide | Maximum 8-hour rolling mean 
+| Nitrogen Dioxide | Maximum 1-hour value |
+| Sulfur Dioxide | Maximum 1-hour value | 
+Carbon Dioxide| Daily mean
 
 Aggregation choices are based on the characteristics of each pollutant and relevant environmental reporting conventions, including guidance published by the [U.S. EPA](https://www.epa.gov/sites/default/files/2015-10/documents/ace3_criteria_air_pollutants.pdf).
 
 ### Land Surface:
 Transformation includes:
 
-- Replacing NASA POWER -999 fill values with null values.
+- Replacing NASA POWER -999 fill values with null
 - Standardizing field names and data types.
 - Consolidating extracted chunks into a single dataset for each processing period.
 
@@ -249,7 +275,7 @@ Transformation includes:
 - Preparing the resulting dataset for validation and loading.
 
 ## Data Quality and Validation
-- Framework: Great Expectations
+Great Expectations provides a validation gate between transformation and loading.
 - Schema checks:
     - compared extracted columns to columns created in the tables
     - severity: critical
@@ -275,20 +301,245 @@ Environmental tables use (`date`, `city_id`) as their logical record key.
 
 <img src="images/climate erd.png" width=600 height=600> 
 
+### Idempotent Loading
 
-## Deployment
+Pipeline loads are designed to be idempotent at the (date, city_id) level.
 
-#### GCP Deployment
+Reprocessing an existing period updates the corresponding analytical record rather than intentionally creating duplicate observations.
 
-#### Local Deployment
+PostgreSQL uses conflict-aware upsert behaviour, while BigQuery cloud loading uses equivalent merge semantics.
+
+## Getting Started
+The project can be run either:
+- locally eit Docker or 
+- on Google Cloud.
+
+ Both deployment options use the same core Airflow pipelines but differ in their storage, database, monitoring, and infrastructure components.
+
+ The instructions below are sufficient for the standard deployment path. More detailed configuration, initialization, CI/CD, and troubleshooting information is available in Deployment Documentation.
+
+### Option 1: Local Deployment
+#### Prerequisites
+Install:
+
+- Git
+- Docker
+- Docker Compose
+
+Airflow, PostgreSQL, Prometheus, and Grafana run in containers and do not need to be installed directly on the host.
+
+#### Setup
+1. Clone the repository and navigate to the project directory:
+
+    `git clone https://github.com/Outis09/climate-data-pipeline`
+
+    `cd climate-data-pipeline`
+
+2. Create the local environment file from the provided example
+    `cp .env.example .env`
+
+3. Open `.env` and provide the required configuration. Do not commit `.env` or credentials to git. 
+
+4. Build and initialize the Docker environment:
+    
+    `docker compose build`
+
+#### Run
+Start the local environment:
+
+`docker compose up -d`
+
+After the containers have started, access the Airflow UI by opening `localhost:8080`. Confirm that the required DAGs have been discovered successfully.
+
+#### Stop
+Temporarily stop the environment:
+
+`docker compose stop`
+
+Restart it:
+
+`docker compose start`
+
+Remove the local environment:
+
+`docker compose down`
+
+### Option 2: GCP
+
+#### Prerequisites
+Before deploying to Google Cloud, ensure the following are available:
+
+- A Google Cloud project with billing enabled
+- Git
+- Google Cloud CLI (gcloud)
+- Terraform
+- Bash-compatible shell
+- A GitHub repository containing the project
+
+The Google Cloud account used for deployment must have sufficient permissions to create and configure the required GCP resources.
+
+#### Setup
+
+1. Clone the repository:
+
+    `git clone https://github.com/Outis09/climate-data-pipeline`
+
+    `cd climate-data-pipeline`
+
+2. Authenticate with Google Cloud:
+
+   `gcloud auth login`
+   
+    `gcloud auth application-default login`
+
+3. Set the target project:
+    
+    `gcloud config set project <PROJECT_ID>`
+
+4. Switch to the terraform folder
+
+    `cd terraform`
+
+5. Create the local variables file from the example provided
+
+    `cp .tfvars.example terraform.tfvars`
+
+6. Configure the required values in the `terraform.tfvars` file. Do not commit credentials or sensitive Terraform variable files.
+
+
+#### Deploy
+
+Run the deployment script:
+
+`./deploy.sh`
+
+The deployment provisions/configures the required Google Cloud infrastructure and supporting pipeline resources according to the project configuration.
+
+#### Choosing a Deployment Option
+
 
 
 ## Observability & Monitoring
 
 
+The pipeline implements observability at both the orchestration and data pipeline levels. This makes it possible to monitor not only whether Airflow tasks are running successfully, but also whether the pipeline is processing the expected amount of climate data and progressing through long-running historical backfills.
+
+Monitoring differs between the local and GCP deployments.
+
+### Local Monitoring
+The local deployment uses Airflow, StatsD, Prometheus, and Grafana.
+
+Airflow emits operational metrics through StatsD, which are collected by the monitoring stack and visualized in Grafana.
+
+### GCP Monitoring
+
+The cloud deployment uses Google Cloud Monitoring and Cloud Logging for Cloud Composer and pipeline observability.
+
+Cloud Composer task and scheduler logs are available through Cloud Logging, while custom pipeline metrics are written to Cloud Monitoring using custom.googleapis.com metric types.
+
+### Airflow Monitoring
+Operational monitoring includes metrics related to:
+
+- Task successes and failures
+- Task execution duration
+- Task queue duration
+- DAG run duration
+- Running tasks
+- Queued tasks
+- Deferred tasks
+- Pool utilization and available slots
+- Scheduler and executor behaviour
+
+These metrics are particularly useful for identifying resource contention, long-running tasks, excessive queue times, and the effect of API quota deferrals.
+
+### Pipeline Metrics
+
+In addition to Airflow's built-in metrics, the project emits custom metrics from the pipeline itself.
+
+These provide visibility into the behaviour and progress of data processing rather than only the state of Airflow tasks.
+
+Metrics include or are being developed for:
+
+- Rows processed and loaded
+- Historical years requested
+- Historical years processed
+- Historical years successfully loaded
+- Backfill progress
+- API rate-limit events
+- Open-Meteo quota exhaustion
+- Pipeline processing progress
+
+Custom metrics are emitted from the pipeline components responsible for the corresponding operation rather than directly from DAG definitions.
+
+This allows the monitoring logic to remain close to the operation being measured.
+
+### Notifications
+
+Airflow notifications are configured using SMTP.
+
+Notifications focus on failures that require intervention rather than every temporary task failure. Tasks may retry automatically, so alerting on every failed attempt would create unnecessary notification noise.
+
+The notification strategy therefore aims to distinguish between recoverable failures and failures that remain after the configured retry policy has been exhausted.
+
+Only the historical backfill DAG sends a success notification because it only succeeds once, comapred to the daily DAG which may run every day.
+
+## CI/CD
+Development follows a feature-branch and pull-request workflow. 
+
+Feature branch -> Pull request -> Cloud Build CI -> DAG / pytest validation -> Merge to main -> Deployment workflow -> Cloud Composer
+
+Pull requests targeting main trigger validation before merge.
+
+Tests are executed against an Airflow version compatible with the deployed Cloud Composer environment to reduce differences between local development and production.
+
+Deployment automation synchronizes the required project assets with the cloud environment after approved changes are merged.
+
+See Development and Operations for additional information.
+
 ## Testing
 
+Automated tests can be executed locally and through CI.
+
+The test suite includes or is intended to cover:
+
+- DAG import/integrity validation
+- DAG structure and dependency assertions
+- custom operator behaviour
+- pipeline utility functions
+
+Locally, tests can be run using one of airflow's containers:
+
+`docker compose exec airflow-scheduler python -m pytest /opt/airflow/tests`
+
+
+For the cloud deployment, testing is automated when CI/CD is configured.
+
+## Infrastructure as Code
+Terraform provisions the core Google Cloud infrastructure required by the project, including applicable:
+
+- APIs
+- Cloud Composer resources
+- Google Cloud Storage
+- BigQuery resources
+- service accounts and IAM
+- supporting cloud configuration
+
+Bash scripts coordinate deployment steps that sit outside or around Terraform-managed infrastructure.
+
+Infrastructure configuration is kept separate from application DAG code.
+
 ## Security
+
+## Known Limitations
+- Non-commercial API quotas constrain the speed of large historical backfills.
+- Historical availability differs between datasets and variables.
+- Some NASA POWER products have substantial publication latency.
+- Large historical backfills may intentionally take several days because API quotas are respected.
+- Air-quality historical coverage is not equivalent to long-term climate coverage.
+- The project is currently designed around a configurable subset of the most populated cities rather than unrestricted global-scale ingestion.
+- External API schema, availability, and licensing changes can affect extraction.
+- Local Docker resources can constrain highly concurrent transformations or database loads.
+- Great Expectations range checks identify potentially suspicious values but do not establish scientific validity.
 
 ## Acknowledgements
 - [Open-Meteo API](https://open-meteo.com/en/docs/climate-api)
