@@ -117,6 +117,12 @@ if ! gcloud storage cp ../include/init-scripts/setup_gx.py "$COMPOSER_DATA_GCS_P
     echo "Error uploading include/init-scripts/setup_gx.py to GCS. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
     exit 1
 fi
+
+# unpausing the setup_gx dag to run
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" dags unpause -- setup_great_expectations 2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error unpausing setup_great_expectations DAG. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
 # trigger setup_gx dag to run
 if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" dags trigger -- setup_great_expectations 2>&1 | tee -a "$LOG_FILE"; then
     echo "Error setting up Great Expectations. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
@@ -129,6 +135,12 @@ HISTORICAL_DATA_START_DATE=$(terraform output -raw historical_data_start_date)
 # validate that the date is in the correct format (YYYY-MM-DD)
 if ! [[ "$HISTORICAL_DATA_START_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && date -d "$HISTORICAL_DATA_START_DATE" >/dev/null 2>&1; then
     echo "Error: historical_data_start_date is not in the correct format (YYYY-MM-DD). Please check your Terraform configuration." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+# unpausing the historical_backfill dag to run
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" dags unpause -- historical_backfill 2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error unpausing historical_backfill DAG. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
     exit 1
 fi
 
