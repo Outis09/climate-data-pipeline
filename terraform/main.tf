@@ -198,6 +198,7 @@ resource "google_composer_environment" "climate_data_environment" {
       STORAGE_BACKEND = "gcs"
       CLIMATE_COUNTRY = var.climate_country
       START_DATE = var.historical_data_start_date
+      GCP_LOCATION = var.region
     }
     }
 
