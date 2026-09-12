@@ -67,6 +67,7 @@ default_args = {
 with DAG(
     dag_id='historical_backfill',
     default_args=default_args, 
+    on_success_callback=dag_success_notify,
     start_date=None,
     schedule=None,
     catchup=False
@@ -130,12 +131,9 @@ with DAG(
         return consolidated_loc
 
     @task
-    def validate_data(parquet_path, api_source, **context):
+    def validate_data(parquet_paths, api_source, **context):
         from utils.validate import run_validation
-        validated_paths = []
-        for path in parquet_path:
-            validated_path = run_validation(parquet_path=path, api_source=api_source)
-            validated_paths.append(validated_path)
+        validated_paths = run_validation(parquet_paths=parquet_paths, api_source=api_source)
 
         return validated_paths
 
@@ -180,7 +178,7 @@ with DAG(
 
         transform_climate = consolidate_daily_climate_chunks(parquet_paths=extract.output)
 
-        validate_climate = validate_data.override(task_id="validate_climate_pre_load")(api_source='climate', parquet_path=transform_climate)
+        validate_climate = validate_data.override(task_id="validate_climate_pre_load")(api_source='climate', parquet_paths=transform_climate)
 
         upsert_climate = upsert_data.override(task_id="upsert_climate")(table_name='daily_climate', parquet_paths=validate_climate)
 
@@ -201,7 +199,7 @@ with DAG(
 
         transform_air_quality = consolidate_daily_air_quality(parquet_paths=extract.output)
 
-        validate_air_quality = validate_data.override(task_id="validate_pre_load")(api_source='air_quality', parquet_path=transform_air_quality)
+        validate_air_quality = validate_data.override(task_id="validate_pre_load")(api_source='air_quality', parquet_paths=transform_air_quality)
 
         upsert_air_quality = upsert_data.override(task_id="upsert_air_quality")(table_name="daily_air_quality", parquet_paths=validate_air_quality)
 
@@ -213,7 +211,7 @@ with DAG(
 
         transform_land_surface = consolidate_daily_land_surface(parquet_paths=backfill_land_surface_period)
 
-        validate_land_surface = validate_data.override(task_id="validate_land_surface_pre_load")(api_source="land_surface", parquet_path=transform_land_surface)
+        validate_land_surface = validate_data.override(task_id="validate_land_surface_pre_load")(api_source="land_surface", parquet_paths=transform_land_surface)
 
         upsert_land_surface = upsert_data.override(task_id="upsert_land_surface")(table_name='daily_land_surface', parquet_paths=validate_land_surface)
 

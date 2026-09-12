@@ -55,6 +55,7 @@ with DAG(
 
     @task
     def get_cities() -> list[str]:
+        """Return a list of paths to the chunks of cities data"""
         from utils.db import extract_cities
         chunk_paths = extract_cities()
         return chunk_paths
@@ -77,6 +78,7 @@ with DAG(
 
     @task(pool="nasa_power_extraction_pool")
     def fetch_daily_land_surface(parquet_chunk_path, **context):
+        """Fetch daily land surface data and return path to saved extract"""
         from utils.extract import extract_daily_land_surface
         start_date = context['data_interval_start'] - timedelta(days=2)
         start_date = start_date.strftime('%Y-%m-%d')
@@ -104,14 +106,10 @@ with DAG(
         return trnasformed_loc
 
     @task
-    def validate_data(parquet_path, api_source, **context):
+    def validate_data(parquet_paths, api_source, **context):
         from utils.validate import run_validation
-        validated_paths = []
-        for path in parquet_path:
-            validated_path = run_validation(parquet_path=path, api_source=api_source)
-            validated_paths.append(validated_path)
-
-        return parquet_path
+        validated_paths = run_validation(parquet_paths=parquet_paths, api_source=api_source)
+        return validated_paths
 
         
     @task(pool="db_upsert_pool", retries=0)
@@ -153,17 +151,17 @@ with DAG(
 
 
     validate_climate = validate_data.override(task_id="validate_climate_pre_load")(
-        parquet_path=consolidating_climate_chunks,
+        parquet_paths=consolidating_climate_chunks,
         api_source="climate"
     )
 
     validate_air_quality = validate_data.override(task_id="validate_air_quality_pre_load")(
-        parquet_path=calc_daily_air_quality,
+        parquet_paths=calc_daily_air_quality,
         api_source="air_quality"
     )
 
     validate_land_surface = validate_data.override(task_id='validate_land_surface_pre_load')(
-        parquet_path=transform_land_surface,
+        parquet_paths=transform_land_surface,
         api_source='land_surface'
     )
 
