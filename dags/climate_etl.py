@@ -151,17 +151,17 @@ with DAG(
 
 
     validate_climate = validate_data.override(task_id="validate_climate_pre_load")(
-        parquet_path=consolidating_climate_chunks,
+        parquet_paths=consolidating_climate_chunks,
         api_source="climate"
     )
 
     validate_air_quality = validate_data.override(task_id="validate_air_quality_pre_load")(
-        parquet_path=calc_daily_air_quality,
+        parquet_paths=calc_daily_air_quality,
         api_source="air_quality"
     )
 
     validate_land_surface = validate_data.override(task_id='validate_land_surface_pre_load')(
-        parquet_path=transform_land_surface,
+        parquet_paths=transform_land_surface,
         api_source='land_surface'
     )
 
