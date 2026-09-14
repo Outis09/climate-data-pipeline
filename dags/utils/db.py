@@ -13,6 +13,7 @@ from cloudpathlib import GSPath
 
 
 def extract_cities() -> list[str]:
+    """Get a country's cities' data based on storage type"""
     storage_type = os.getenv('STORAGE_BACKEND')
     country = os.getenv('CLIMATE_COUNTRY')
     if storage_type == 'local':
@@ -22,7 +23,8 @@ def extract_cities() -> list[str]:
     return paths
 
 
-def extract_cities_postgres(country):
+def extract_cities_postgres(country: str) -> list[str]:
+    """Get a country's cities' data """
     chunk_storage_path = Path('/opt/airflow/include/data/cities')
     if next(chunk_storage_path.glob("*.parquet"), None):
         return [str(chunk_path) for chunk_path in (chunk_storage_path.glob("*.parquet"))]
@@ -51,7 +53,8 @@ def extract_cities_postgres(country):
         chunk_no += 1
     return chunk_paths
 
-def extract_cities_bigquery(country):
+def extract_cities_bigquery(country: str) -> list[str]:
+    """Get a country's cities' data"""
     gcs_client = storage.Client()
     dataset = os.getenv('BQ_DATASET_NAME')
     # project = os.getenv('PROJECT_ID')
@@ -149,9 +152,11 @@ main_table_config = {
 }
 
 def to_decimal(value):
+    """Convert value to decimal"""
     return None if pd.isna(value) else Decimal(str(float(value))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-def bq_upsert_tables(parquet_path, table_name, run_id):
+def bq_upsert_tables(parquet_path: list[str], table_name: str, run_id: str) -> str:
+    """Upsert data into BigQuery using a staging table"""
     run_id = re.sub(r'[^a-zA-Z0-9_]', '_', str(run_id))
     dataset = os.getenv("BQ_DATASET_NAME")
 
@@ -248,7 +253,8 @@ def bq_upsert_tables(parquet_path, table_name, run_id):
         )
     return first_date
 
-def upsert_postgres(parquet_path, table_name):
+def upsert_postgres(parquet_path: list[str], table_name: str):
+    """Upsert data into Postgres"""
     df_list = [pd.read_parquet(path) for path in parquet_path]
     df = pd.concat(df_list, ignore_index=True)
     df['date'] = pd.to_datetime(df['date']).dt.date
@@ -269,6 +275,7 @@ def upsert_postgres(parquet_path, table_name):
     return first_date
 
 def load_data(parquet_path, table_name, **context):
+    """Upsert data based on storage type"""
     storage_type = os.getenv('STORAGE_BACKEND')
 
     if storage_type == 'local':

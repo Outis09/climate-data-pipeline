@@ -6,7 +6,8 @@ import os
 from cloudpathlib import GSPath
 from pathlib import PurePath
 
-def get_date_from_path(parquet_path):
+def get_date_from_path(parquet_path: str) -> tuple[int, int, int]:
+    """Get date details from path name"""
     path = PurePath(parquet_path)
     day = int(path.stem)
     month = int(path.parent.name)
@@ -14,7 +15,8 @@ def get_date_from_path(parquet_path):
 
     return year, month, day
 
-def run_validation(api_source, parquet_paths):
+def run_validation(api_source: str, parquet_paths: list[str]) -> list[str]:
+    """Validate data using Great Expectations Checkpoint"""
     storage_type = os.getenv('STORAGE_BACKEND')
     if storage_type == 'local':
         gx_root = '/opt/airflow/include/gx'

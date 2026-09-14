@@ -4,7 +4,8 @@ import google.auth
 from airflow.sdk.observability import stats
 from google.cloud import monitoring_v3
 
-def emit_gauge(metric_name: str, value, labels=None):
+def emit_gauge(metric_name: str, value: int | float, labels=None):
+    """Emits a gauge metric"""
     deployment_option = os.getenv('STORAGE_BACKEND')
     if deployment_option == 'local':
         metric_name = metric_name.replace('/', '.')
@@ -38,7 +39,8 @@ def emit_gauge(metric_name: str, value, labels=None):
 
         client.create_time_series(request={"name": project_name, "time_series": [series]})
 
-def emit_cumulative(metric_name, value, labels=None, dag_id=None, start_time=None, run_id=None, task_id=None, map_index=None, try_number=None):
+def emit_cumulative(metric_name: str, value: int | float, labels=None, dag_id=None, start_time=None, run_id=None, task_id=None, map_index=None, try_number=None):
+    """Emits a cumulative metric"""
     deployment_option = os.getenv('STORAGE_BACKEND')
     if deployment_option == 'local':
         metric_name = metric_name.replace('/', '.')
@@ -75,13 +77,6 @@ def emit_cumulative(metric_name, value, labels=None, dag_id=None, start_time=Non
              "end_time": {"seconds": end_seconds}})
 
         point = monitoring_v3.Point({"interval": interval, "value": {"int64_value": int(value)}})
-        # point.value.int64_value = int(value)
-
-        # point.interval.start_time.seconds = int(start_time.timestamp())
-        # point.interval.start_time.nanos = start_nanos
-
-        # point.interval.end_time.seconds = int(time.time())
-        # point.interval.end_time.nanos = end_nanos
 
         series.points = [point]
 

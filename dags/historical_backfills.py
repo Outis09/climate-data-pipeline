@@ -5,14 +5,11 @@ from airflow.timetables.interval import CronDataIntervalTimetable
 from airflow.sdk.observability import stats
 from utils.extract import extract_daily_air_quality, extract_daily_climate
 from utils.db import extract_cities, load_data
-# from utils.transform import transform_daily_climate_chunks, transform_daily_land_surface, agg_hourly_air_quality
-# from utils.validate import run_validation
-# from utils.metrics import emit_gauge
 from utils.custom.operators import QuotaAwareOpenMeteoExtractionOperator
 from airflow.providers.smtp.notifications.smtp import SmtpNotifier
 
 
-
+# email template to send when task fails
 task_fail_notify = SmtpNotifier(
         smtp_conn_id="smtp_default",
         to="sshakurace@gmail.com",
@@ -31,6 +28,7 @@ task_fail_notify = SmtpNotifier(
 """
     )
 
+# email template to send when dag succeeds
 dag_success_notify = SmtpNotifier(
     smtp_conn_id="smtp_default",
     to="sshakurace@gmail.com",
@@ -57,6 +55,7 @@ dag_success_notify = SmtpNotifier(
 """
 )
 
+# default arguments for tasks
 default_args = {
     "owner": "airflow",
     "retries": 0,
@@ -73,7 +72,8 @@ with DAG(
     catchup=False
 ):
     @task
-    def get_periods(**context):
+    def get_periods() -> list[list[str]]:
+        """Return start and end date for historical data extraction"""
         import os
         from datetime import datetime, timedelta
         from utils.metrics import emit_gauge
@@ -93,15 +93,18 @@ with DAG(
         emit_gauge("pipeline/backfill/years_requested", value=num_years)
         # stats.gauge("pipeline.backfill.years_requested", value=num_years)
         return periods
+
+
     @task
     def get_cities() -> list[str]:
+        """Return paths to city chunks"""
         chunk_paths = extract_cities()
         return chunk_paths
 
         
-
     @task
-    def backfill_period_land_surface(period, cities_chunk_paths, **context):
+    def backfill_period_land_surface(period: list[str], cities_chunk_paths: list[str]) -> list[str]:
+        """Extract land surface data for given city chunk data and period"""
         from utils.extract import extract_daily_land_surface
         start_date = period[0]
         end_date = period[1]
@@ -112,26 +115,31 @@ with DAG(
             parquet_chunk_paths.extend(parquet_chunk_path)
         return parquet_chunk_paths
 
+
     @task
-    def consolidate_daily_land_surface(parquet_paths):
+    def consolidate_daily_land_surface(parquet_paths: list[str]) -> list[str]:
+        """Consolidate raw land surface data into transformed data in Parquet files"""
         from utils.transform import transform_daily_land_surface
         transformed_loc = transform_daily_land_surface(parquet_paths)
         return transformed_loc
 
     @task
-    def consolidate_daily_climate_chunks(parquet_paths):
+    def consolidate_daily_climate_chunks(parquet_paths: list[str]) -> list[str]:
+        """Consolidate raw climate data into transformed data in Parquet files"""
         from utils.transform import transform_daily_climate_chunks
         consolidated_loc = transform_daily_climate_chunks(parquet_paths)
         return consolidated_loc
 
     @task
-    def consolidate_daily_air_quality(parquet_paths):
+    def consolidate_daily_air_quality(parquet_paths: list[str]) -> list[str]:
+        """Aggregate hourly raw air quality data into daily transformed data in Parquet files"""
         from utils.transform import agg_hourly_air_quality
         consolidated_loc = agg_hourly_air_quality(parquet_paths=parquet_paths)
         return consolidated_loc
 
     @task
-    def validate_data(parquet_paths, api_source, **context):
+    def validate_data(parquet_paths: list[str], api_source: str) -> list[str]:
+        """Validate transformed data using Great Expectations Suites and Checkpoints"""
         from utils.validate import run_validation
         validated_paths = run_validation(parquet_paths=parquet_paths, api_source=api_source)
 
@@ -139,12 +147,14 @@ with DAG(
 
     @task(pool="db_upsert_pool")
     def upsert_data(parquet_paths, table_name, **context):
+        """Upsert data into Postgres or BigQuery"""
         from utils.db import load_data
         processed_date = load_data(parquet_paths, table_name, **context)
         return processed_date
 
     @task
     def emit_year_processed_metric(processed_date, metric_name):
+        """Emit year processed as a metric"""
         from utils.metrics import emit_gauge
         try:
             processed_date = datetime.strptime(processed_date, '%Y-%m-%d')
@@ -156,15 +166,17 @@ with DAG(
 
 
     @task
-    def build_city_period_pairs(periods, cities):
+    def build_city_period_pairs(periods: list[str], cities: list[str]) -> list[dict]:
+        """Build a pair of cities and periods"""
         pairs = []
         for period in periods:
             pairs.append({"period": period, "parquet_paths":cities})
-        return pairs #[{"period": period, "parquet_paths":cities} for period in periods]
+        return pairs 
 
-    
+
+    # task group for depth-first execution of climate tasks
     @task_group(group_id="climate_period_pipeline")
-    def climate_period_pipeline(period, parquet_paths):
+    def climate_period_pipeline(period: list[str], parquet_paths: list[str]):
         extract = QuotaAwareOpenMeteoExtractionOperator(
             task_id="backfill_climate",
             python_callable=extract_daily_climate,
@@ -184,8 +196,10 @@ with DAG(
 
         emit_climate_year_processed_metric = emit_year_processed_metric.override(task_id="emit_climate_year_processed")(processed_date=upsert_climate, metric_name="pipeline.backfill.climate.years_processed")
 
+
+    # task group for depth-first execution of air quality tasks
     @task_group(group_id="air_quality_pipeline")
-    def air_quality_period_pipeline(period, parquet_paths):
+    def air_quality_period_pipeline(period: list[str], parquet_paths: list[str]):
         extract = QuotaAwareOpenMeteoExtractionOperator(
             task_id="backfill_air_quality",
             python_callable=extract_daily_air_quality,
@@ -205,8 +219,10 @@ with DAG(
 
         emit_air_quality_year_processed_metric = emit_year_processed_metric.override(task_id="emit_air_quality_year_processed")(processed_date=upsert_air_quality, metric_name="pipeline.backfill_air_quality.years_processed")
 
+
+    # task group for depth-first execution of land surface tasks
     @task_group(group_id="land_surface_period_pipeline")
-    def land_surface_pipeline(period, cities_chunk_paths):
+    def land_surface_pipeline(period: list[str], cities_chunk_paths: list[str]):
         backfill_land_surface_period = backfill_period_land_surface(cities_chunk_paths=cities_chunk_paths, period=period)
 
         transform_land_surface = consolidate_daily_land_surface(parquet_paths=backfill_land_surface_period)
@@ -222,6 +238,7 @@ with DAG(
     periods = get_periods()
     pair_list = build_city_period_pairs(periods=periods, cities=cities) #partial(cities=cities).expand(periods=periods)
 
+    # dynamic task mapping of task groups
     climate_backfill = climate_period_pipeline.expand_kwargs(pair_list)
     air_quality_backfill = air_quality_period_pipeline.expand_kwargs(pair_list)
     land_surface_backfill = land_surface_pipeline.partial(cities_chunk_paths=cities).expand(period=periods)

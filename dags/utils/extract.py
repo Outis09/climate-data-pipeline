@@ -10,7 +10,8 @@ from utils.helpers import get_data_path
 import os
 from cloudpathlib import GSPath
 
-def extract_daily_climate(period: list, cities_chunk_path):    
+def extract_daily_climate(period: list[str], cities_chunk_path: str) -> list[str] | str:   
+    """Extract climate data from Open Meteo""" 
     storage_type = os.getenv('STORAGE_BACKEND')
     if storage_type == 'local':
         parquet_chunk_path = Path(cities_chunk_path)
@@ -129,7 +130,8 @@ def extract_daily_climate(period: list, cities_chunk_path):
         return file_names
 
 
-def extract_daily_air_quality(period, cities_chunk_path):
+def extract_daily_air_quality(period: list[str], cities_chunk_path: str) -> list[str] | str:
+    """Extract air quality data from Open Meteo"""
     storage_type = os.getenv('STORAGE_BACKEND')
 
     if storage_type == 'local':
@@ -222,7 +224,8 @@ def extract_daily_air_quality(period, cities_chunk_path):
         return file_path
 
 
-def extract_daily_land_surface(period, cities_chunk_paths):
+def extract_daily_land_surface(period: list[str], cities_chunk_paths: str) -> list[str] | str:
+    """Extract land surface data from NASA Power"""
     storage_type = os.getenv('STORAGE_BACKEND')
     if storage_type == 'local':
         parquet_chunk_path = Path(cities_chunk_paths)

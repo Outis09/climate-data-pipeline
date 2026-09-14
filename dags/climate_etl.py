@@ -59,69 +59,61 @@ with DAG(
         from utils.db import extract_cities
         chunk_paths = extract_cities()
         return chunk_paths
-
-
-    # @task(pool="open_meteo_extraction_pool")
-    # def fetch_daily_climate(parquet_chunk_path, **context):
-    #     start_date = context['data_interval_start'].strftime('%Y-%m-%d')
-    #     #end_date = context['data_interval_end'].strftime('%Y-%m-%d')      
-    #     file_name = extract_daily_climate(period=[start_date, start_date], cities_chunk_path=parquet_chunk_path)
-    #     return  file_name
-
-
-    # @task(pool="open_meteo_extraction_pool")
-    # def fetch_daily_air_quality(parquet_chunk_path, **context):
-    #     start_date = context['data_interval_start'].strftime('%Y-%m-%d')
-    #     file_name = extract_daily_air_quality(period=[start_date, start_date], parquet_chunk_path=parquet_chunk_path, **context)
-    #     return file_name
     
 
     @task(pool="nasa_power_extraction_pool")
-    def fetch_daily_land_surface(parquet_chunk_path, **context):
+    def fetch_daily_land_surface(parquet_chunk_path: str, **context) -> str:
         """Fetch daily land surface data and return path to saved extract"""
         from utils.extract import extract_daily_land_surface
         start_date = context['data_interval_start'] - timedelta(days=2)
         start_date = start_date.strftime('%Y-%m-%d')
-        # end_date = context['data_interval_end'].strftime('%Y-%m-%d')
         file_name = extract_daily_land_surface(period=[start_date, start_date], cities_chunk_paths=parquet_chunk_path)
         return file_name
 
+
     @task
-    def aggregate_hourly_air_quality(parquet_paths,**context):
+    def aggregate_hourly_air_quality(parquet_paths: list[str]) -> list[str]:
+        """Aggregate hourly raw air quality data into daily transformed data in Parquet files"""
         from utils.transform import agg_hourly_air_quality
         parquet_path = agg_hourly_air_quality(parquet_paths)
         return parquet_path
+
     
     @task
-    def consolidate_daily_climate_chunks(parquet_paths, **context):
+    def consolidate_daily_climate_chunks(parquet_paths: list[str]) -> list[str]:
+        """Consolidate raw city-chunked climate data into transformed data in Parquet files"""
         from utils.transform import transform_daily_climate_chunks
         consolidated_loc = transform_daily_climate_chunks(raw_parquet_paths=parquet_paths)
         return consolidated_loc
 
 
     @task
-    def consolidate_daily_land_surface(parquet_paths, **context):
+    def consolidate_daily_land_surface(parquet_paths: list[str]) -> list[str]:
+        """Consolidate raw city-chunked land surface data into transformed data in Parquet files"""
         from utils.transform import transform_daily_land_surface
         trnasformed_loc = transform_daily_land_surface(raw_parquet_paths=parquet_paths)
         return trnasformed_loc
 
+
     @task
-    def validate_data(parquet_paths, api_source, **context):
+    def validate_data(parquet_paths: list[str], api_source: str)-> list[str]:
+        """Run Great Expectations Checkpoint on transformed data"""
         from utils.validate import run_validation
         validated_paths = run_validation(parquet_paths=parquet_paths, api_source=api_source)
         return validated_paths
 
         
     @task(pool="db_upsert_pool", retries=0)
-    def upsert_data(parquet_paths, table_name, **context):
+    def upsert_data(parquet_paths: list[str], table_name: str, **context) -> None:
+        """Upsert data into Postgres or BigQuery"""
         from utils.db import load_data
         load_data(parquet_paths, table_name, **context)
         return None
          
 
-
     cities = get_cities()
 
+    # extraction tasks
     fetch_climate = QuotaAwareOpenMeteoExtractionOperator(
     task_id="fetch_daily_climate",
     python_callable=extract_daily_climate,
@@ -141,15 +133,16 @@ with DAG(
         pool_slots=1,
         priority_weight=100
     )
-    # fetch_climate = fetch_daily_climate.expand(parquet_chunk_path=cities)
-    # fetch_air_quality = fetch_daily_air_quality.expand(parquet_chunk_path=cities)
     fetch_land_surface = fetch_daily_land_surface.expand(parquet_chunk_path=cities)
 
+
+    # transformation tasks
     calc_daily_air_quality = aggregate_hourly_air_quality(parquet_paths=fetch_air_quality.output)
     consolidating_climate_chunks = consolidate_daily_climate_chunks(parquet_paths=fetch_climate.output)
     transform_land_surface = consolidate_daily_land_surface(parquet_paths=fetch_land_surface)
 
 
+    # validation tasks
     validate_climate = validate_data.override(task_id="validate_climate_pre_load")(
         parquet_paths=consolidating_climate_chunks,
         api_source="climate"
@@ -165,6 +158,8 @@ with DAG(
         api_source='land_surface'
     )
 
+
+    # db upsert tasks
     upsert_climate = upsert_data.override(task_id="upsert_climate")(
         validate_climate, table_name='daily_climate'
     )
@@ -179,5 +174,6 @@ with DAG(
 
     end = EmptyOperator(task_id='end')
 
+    # explicit dependencies
     start >> cities
     [upsert_climate , upsert_air_quality, upsert_land_surface] >> end
