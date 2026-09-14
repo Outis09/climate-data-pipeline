@@ -274,12 +274,12 @@ def upsert_postgres(parquet_path: list[str], table_name: str):
     )
     return first_date
 
-def load_data(parquet_path, table_name, **context):
+def load_data(parquet_path: list[str], table_name: str, run_id: str):
     """Upsert data based on storage type"""
     storage_type = os.getenv('STORAGE_BACKEND')
 
     if storage_type == 'local':
         first_date = upsert_postgres(parquet_path, table_name)
     if storage_type == 'gcs':
-        first_date = bq_upsert_tables(parquet_path, table_name, run_id=context['run_id'])
+        first_date = bq_upsert_tables(parquet_path, table_name, run_id=run_id)
     return first_date

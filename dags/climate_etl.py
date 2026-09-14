@@ -62,10 +62,10 @@ with DAG(
     
 
     @task(pool="nasa_power_extraction_pool")
-    def fetch_daily_land_surface(parquet_chunk_path: str, **context) -> str:
+    def fetch_daily_land_surface(parquet_chunk_path: str, data_interval_start: pendulum.DateTime) -> str:
         """Fetch daily land surface data and return path to saved extract"""
         from utils.extract import extract_daily_land_surface
-        start_date = context['data_interval_start'] - timedelta(days=2)
+        start_date = data_interval_start - timedelta(days=2)
         start_date = start_date.strftime('%Y-%m-%d')
         file_name = extract_daily_land_surface(period=[start_date, start_date], cities_chunk_paths=parquet_chunk_path)
         return file_name
@@ -104,10 +104,10 @@ with DAG(
 
         
     @task(pool="db_upsert_pool", retries=0)
-    def upsert_data(parquet_paths: list[str], table_name: str, **context) -> None:
+    def upsert_data(parquet_paths: list[str], table_name: str, run_id: str) -> None:
         """Upsert data into Postgres or BigQuery"""
         from utils.db import load_data
-        load_data(parquet_paths, table_name, **context)
+        load_data(parquet_paths, table_name, run_id)
         return None
          
 
