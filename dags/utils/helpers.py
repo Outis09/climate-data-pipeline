@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
 
-def get_data_path(relative_path):
+def get_data_path(relative_path: str) -> str | Path | None:
+    """"Gets data path based on storage type"""
     storage_type = os.environ.get('STORAGE_BACKEND')
     bucket = os.environ.get('BUCKET_NAME')
     local_dir = '/opt/airflow/include/data'

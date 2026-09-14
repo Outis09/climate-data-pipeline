@@ -1,10 +1,12 @@
 import great_expectations as gx
+from great_expectations.data_context.data_context.file_data_context import FileDataContext
 from pathlib import Path
 import os
 from cloudpathlib import GSPath
 
 
-def create_daily_climate_pre_load_suite(context):
+def create_daily_climate_pre_load_suite(context: FileDataContext):
+    """Create Expectation Suite for validating climate data"""
     suite_name = "pre_load_climate"
     pre_load_climate_suite = gx.ExpectationSuite(name=suite_name)
     pre_load_climate_suite = context.suites.add_or_update(pre_load_climate_suite)
@@ -80,7 +82,8 @@ def create_daily_climate_pre_load_suite(context):
         ))
 
 
-def create_daily_air_quality_pre_load_suite(context):
+def create_daily_air_quality_pre_load_suite(context: FileDataContext):
+    """Create Expectation Suite for validating air quality data"""
     suite_name = "pre_load_air_quality"
     pre_load_air_quality_suite = gx.ExpectationSuite(name=suite_name)
     pre_load_air_quality_suite =  context.suites.add_or_update(pre_load_air_quality_suite)
@@ -103,7 +106,8 @@ def create_daily_air_quality_pre_load_suite(context):
             mostly=1.0
         ))
 
-def create_daily_land_surface_pre_load_suite(context):
+def create_daily_land_surface_pre_load_suite(context: FileDataContext):
+    """Create Expectation Suite for validating land surface data"""
     suite_name = "pre_load_land_surface"
     pre_load_land_surface_suite = gx.ExpectationSuite(name=suite_name)
     pre_load_land_surface_suite = context.suites.add_or_update(pre_load_land_surface_suite)
@@ -161,7 +165,8 @@ def create_daily_land_surface_pre_load_suite(context):
     
 
 
-def configure_checkpoint(context, api_source, storage_type, gcs_bucket=None):
+def configure_checkpoint(context: FileDataContext, api_source: str, storage_type: str, gcs_bucket=None):
+    """Create a Great Expectations Checkpoint"""
     expectation_suite = context.suites.get(name=f"pre_load_{api_source}")
 
     if storage_type == 'local':

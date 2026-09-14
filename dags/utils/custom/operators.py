@@ -1,5 +1,5 @@
 from datetime import timedelta, datetime
-
+from collections.abc import Callable
 from airflow.sdk import BaseOperator, Context
 from airflow.sdk.observability import stats
 from airflow.providers.standard.triggers.temporal import TimeDeltaTrigger
@@ -7,10 +7,10 @@ from airflow.sdk.exceptions import AirflowException
 from utils.metrics import emit_cumulative
 
 class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
-    """A custom operator, built using the BaseOperator, that defers an Open Meteo extraction task for 24 hours when the daily API limit is exceeded."""
+    """A custom Airflow operator that defers an Open Meteo extraction task API limit is exceeded."""
 
     template_fields = ('period', 'parquet_paths')
-    def __init__(self, *, python_callable,period, parquet_paths, **kwargs):
+    def __init__(self, *, python_callable: Callable,period: list[str], parquet_paths: list[str], **kwargs):
         super().__init__(**kwargs)
         self.python_callable = python_callable
         self.period = period
