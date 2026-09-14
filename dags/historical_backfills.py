@@ -146,14 +146,14 @@ with DAG(
         return validated_paths
 
     @task(pool="db_upsert_pool")
-    def upsert_data(parquet_paths, table_name, **context):
+    def upsert_data(parquet_paths: list[str], table_name: str, run_id: str) -> str:
         """Upsert data into Postgres or BigQuery"""
         from utils.db import load_data
-        processed_date = load_data(parquet_paths, table_name, **context)
+        processed_date = load_data(parquet_paths, table_name, run_id)
         return processed_date
 
     @task
-    def emit_year_processed_metric(processed_date, metric_name):
+    def emit_year_processed_metric(processed_date, metric_name: str):
         """Emit year processed as a metric"""
         from utils.metrics import emit_gauge
         try:
