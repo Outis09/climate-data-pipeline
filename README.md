@@ -347,7 +347,9 @@ Airflow, PostgreSQL, Prometheus, and Grafana run in containers and do not need t
 
 3. Open `.env` and provide the required configuration. Do not commit `.env` or credentials to git. 
 
-4. Build and initialize the Docker environment:
+4. Start Docker by opening the Docker Desktop application.
+
+5. Build and initialize the Docker environment:
     
     `docker compose build`
 
