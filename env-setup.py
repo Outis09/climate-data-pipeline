@@ -14,7 +14,7 @@ content = f"""
 # -------------------------Generated secrets-------------------------
 FERNET_KEY={fernet_key}
 AIRFLOW__API_AUTH__JWT_SECRET={jwt_secret}
-AIRFLOW__API_AUTH_JWT_ISSUER=climate-data-pipeline
+AIRFLOW__API_AUTH__JWT_ISSUER=climate-data-pipeline
 
 # -------------------------Airflow configuration-------------------------
 AIRFLOW_UID=50000
