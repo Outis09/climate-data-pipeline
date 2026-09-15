@@ -1,4 +1,6 @@
-CREATE TABLE IF NOT EXISTS cities (
+CREATE SCHEMA IF NOT EXISTS climate;
+
+CREATE TABLE IF NOT EXISTS climate.cities (
     city_id      BIGINT PRIMARY KEY,
     city         VARCHAR(100) NOT NULL,
     city_ascii   VARCHAR(100),
@@ -14,7 +16,7 @@ CREATE TABLE IF NOT EXISTS cities (
     CONSTRAINT uq_city_coordinates UNIQUE (lat, lng)
 );
 
-CREATE TABLE IF NOT EXISTS daily_climate (
+CREATE TABLE IF NOT EXISTS climate.daily_climate (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
 
     date DATE NOT NULL,
@@ -56,7 +58,7 @@ CREATE TABLE IF NOT EXISTS daily_climate (
         REFERENCES cities(city_id)
 );
 
-CREATE TABLE IF NOT EXISTS daily_air_quality (
+CREATE TABLE IF NOT EXISTS climate.daily_air_quality (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
 
     city_id BIGINT NOT NULL,
@@ -84,7 +86,7 @@ CREATE TABLE IF NOT EXISTS daily_air_quality (
         REFERENCES cities(city_id)
 );
 
-CREATE TABLE IF NOT EXISTS daily_land_surface (
+CREATE TABLE IF NOT EXISTS climate.daily_land_surface (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
 
     city_id BIGINT NOT NULL,
