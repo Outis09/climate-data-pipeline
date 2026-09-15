@@ -323,6 +323,7 @@ The project can be run either:
 Install:
 
 - Git
+- Python
 - Docker
 - Docker Compose
 
@@ -335,7 +336,13 @@ Airflow, PostgreSQL, Prometheus, and Grafana run in containers and do not need t
 
     `cd climate-data-pipeline`
 
-2. Create the local environment file from the provided example
+2. Create the local environment file:
+    - Option 1: run a setup script that auto generates fernet keys and jwt secrets for airflow
+    
+    `python env-setup.py`
+
+    - Option 2: copy the example file but you'll need to manually generate fernet keys and jwt secrets
+
     `cp .env.example .env`
 
 3. Open `.env` and provide the required configuration. Do not commit `.env` or credentials to git. 
@@ -363,6 +370,14 @@ Restart it:
 Remove the local environment:
 
 `docker compose down`
+
+#### Access the data
+The data is accessible through pgAdmin 4.
+
+1. Open `localhost:5050` in a browser.
+2. Enter any requested credentials (can be found in .env file).
+3. Drop down the `Climate_Server` server.
+4. Table will be available in the `climate` schema.
 
 ### Option 2: GCP
 
@@ -414,6 +429,9 @@ Run the deployment script:
 `./deploy.sh`
 
 The deployment provisions/configures the required Google Cloud infrastructure and supporting pipeline resources according to the project configuration.
+
+#### Access the data
+Data will be available in BigQuery.
 
 #### Choosing a Deployment Option
 
