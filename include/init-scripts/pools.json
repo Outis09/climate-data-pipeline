@@ -1,5 +1,5 @@
 {
-    "noaa_power_extraction_pool": {
+    "nasa_power_extraction_pool": {
         "description": "Pool for NOAA Power Extraction Tasks",
         "slots": 4
     },

@@ -10,6 +10,7 @@ def get_raw_csv(csv_path: Path):
 def clean_csv(df: pd.DataFrame, csv_path: Path):
     clean_df = df.drop_duplicates(subset=['lat', 'lng'], keep='first')
     clean_df['population'] = clean_df['population'].astype("Int64")
+    clean_df['id'] = clean_df['id'].astype("Int64")
     clean_df.rename(columns={'id':'city_id'}, inplace=True)
 
     clean_csv_save_path = csv_path.parents[0] / "world_cities_clean.csv"
@@ -20,19 +21,21 @@ def upsert_cleaned_cities(df: pd.DataFrame):
     hook = PostgresHook(postgres_conn_id='weather_db')
     engine = hook.get_sqlalchemy_engine()
     with engine.begin() as conn:
-        conn.execute(text("CREATE TEMP TABLE cities_temp (LIKE cities INCLUDING DEFAULTS)"))
+        # conn.execute(text("CREATE TEMP TABLE IF NOT EXISTS pg_temp.cities_temp (LIKE climate.cities INCLUDING ALL) ON COMMIT DROP"))
 
-        df.to_sql('cities_temp', con=conn, if_exists='append', index=False)
+        df.to_sql('cities_temp', con=conn, schema="climate", if_exists='append', index=False)
 
         conn.execute(text("""
-        INSERT INTO cities
-        SELECT *
-        FROM cities_temp
+        INSERT INTO climate.cities (city_id, city, city_ascii, lat, lng, country, iso2, iso3, admin_name, capital, population)
+        SELECT city_id, city, city_ascii, lat, lng, country, iso2, iso3, admin_name, capital, population
+        FROM climate.cities_temp
         ON CONFLICT (city_id)
         DO UPDATE SET
             lat = EXCLUDED.lat,
             lng = EXCLUDED.lng
         """))
+
+        conn.execute(text("DROP TABLE climate.cities_temp"))
 
 
 if __name__ == "__main__":

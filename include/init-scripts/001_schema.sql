@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS climate.daily_climate (
 
     CONSTRAINT fk_daily_climate_city
         FOREIGN KEY (city_id)
-        REFERENCES cities(city_id)
+        REFERENCES climate.cities(city_id)
 );
 
 CREATE TABLE IF NOT EXISTS climate.daily_air_quality (
@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS climate.daily_air_quality (
 
     CONSTRAINT fk_daily_air_quality_city
         FOREIGN KEY (city_id)
-        REFERENCES cities(city_id)
+        REFERENCES climate.cities(city_id)
 );
 
 CREATE TABLE IF NOT EXISTS climate.daily_land_surface (
@@ -115,5 +115,5 @@ CREATE TABLE IF NOT EXISTS climate.daily_land_surface (
 
     CONSTRAINT fk_daily_land_surface_city
         FOREIGN KEY (city_id)
-        REFERENCES cities(city_id)
+        REFERENCES climate.cities(city_id)
 );
