@@ -1,3 +1,4 @@
+import pendulum
 from airflow.sdk import DAG, task, task_group
 from datetime import datetime
 from airflow.providers.standard.operators.empty import EmptyOperator
@@ -7,6 +8,7 @@ from utils.extract import extract_daily_air_quality, extract_daily_climate
 from utils.db import extract_cities, load_data
 from utils.custom.operators import QuotaAwareOpenMeteoExtractionOperator
 from airflow.providers.smtp.notifications.smtp import SmtpNotifier
+
 
 
 # email template to send when task fails
@@ -58,7 +60,10 @@ dag_success_notify = SmtpNotifier(
 # default arguments for tasks
 default_args = {
     "owner": "airflow",
-    "retries": 0,
+    "retries": 3,
+    "retr_delay": pendulum.duration(minutes=2),
+    "retry_exponential_backoff": True,
+    "max_retry_delay": pendulum.duration(hours=1), 
     "on_failure_callback": task_fail_notify
 }
 
@@ -67,8 +72,8 @@ with DAG(
     dag_id='historical_backfill',
     default_args=default_args, 
     on_success_callback=dag_success_notify,
-    start_date=None,
-    schedule=None,
+    start_date=pendulum.datetime(2026, 1 , 1, tz='UTC'),
+    schedule="@once",
     catchup=False
 ):
     @task
