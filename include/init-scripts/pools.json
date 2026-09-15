@@ -5,7 +5,8 @@
     },
     "open_meteo_extraction_pool": {
         "description": "Pool for Open Meteo Extraction Tasks",
-        "slots": 4
+        "slots": 4,
+        "include_deferred": true
     },
     "db_upsert_pool": {
         "description": "Pool for Database Upsert Tasks",
