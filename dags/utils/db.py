@@ -31,7 +31,7 @@ def extract_cities_postgres(country: str) -> list[str]:
 
     hook = PostgresHook(postgres_conn_id='weather_db')
     sql_query = f"""SELECT city_id, lat, lng 
-                    FROM cities 
+                    FROM climate.cities 
                     WHERE country = '{country}'
                     ORDER BY population DESC
                     LIMIT 100;
@@ -267,7 +267,7 @@ def upsert_postgres(parquet_path: list[str], table_name: str):
     rows = list(df.itertuples(index=False, name=None))
 
     hook.upsert_rows(
-        table=table_name,
+        table=f"climate.{table_name}",
         rows=rows,
         target_fields=df.columns.to_list(),
         conflict_fields=['city_id', 'date']
