@@ -5,6 +5,7 @@ from airflow.sdk.exceptions import AirflowException
 import os
 from cloudpathlib import GSPath
 from pathlib import PurePath
+from metrics import emit_cumulative
 
 def get_date_from_path(parquet_path: str) -> tuple[int, int, int]:
     """Get date details from path name"""
@@ -38,7 +39,8 @@ def run_validation(api_source: str, parquet_paths: list[str]) -> list[str]:
         validation_result_id = list(result.run_results.keys())[0]
         validation_result = result.run_results[validation_result_id]
 
-        if validation_result.get_max_severity_failure() == "CRITICAL": 
+        if validation_result.get_max_severity_failure() == "CRITICAL":
+            emit_cumulative(metric_name="pipeline/global/gx_validations/failed_validations", value=1, labels={"api_source": api_source}) 
         # if not result.success:
             raise AirflowException(
                 f"{api_source} data failed GX validation for {year}/{month}/{day:02d}"
