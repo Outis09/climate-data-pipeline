@@ -372,3 +372,18 @@ resource "google_monitoring_metric_descriptor" "open_meteo_api_rate_limit_hits" 
         description = "Type of rate limit hit"
     }
 }
+
+resource "google_monitoring_metric_descriptor" "failed_validations" {
+    project = var.project_id
+    description = "Number of times transformed data files have failed validation"
+    display_name = "GX Failed Validations"
+    type = "custom.googleapis.com/pipeline/global/gx_validations/failed_validations"
+    metric_kind = "CUMULATIVE"
+    value_type = "INT64"
+
+    labels {
+        key = "api_source"
+        value_type = "STRING"
+        description = "Source of the data that failed the validation"
+    }
+}
