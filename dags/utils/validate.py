@@ -5,7 +5,7 @@ from airflow.sdk.exceptions import AirflowException
 import os
 from cloudpathlib import GSPath
 from pathlib import PurePath
-from metrics import emit_cumulative
+from utils.metrics import emit_cumulative
 
 def get_date_from_path(parquet_path: str) -> tuple[int, int, int]:
     """Get date details from path name"""

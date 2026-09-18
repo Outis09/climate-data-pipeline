@@ -9,6 +9,7 @@ from utils.helpers import get_data_path
 import re
 from decimal import Decimal, ROUND_HALF_UP
 from cloudpathlib import GSPath
+from utils.metrics import emit_gauge
 
 
 
@@ -46,11 +47,17 @@ def extract_cities_postgres(country: str) -> list[str]:
     chunk_storage_path.mkdir(parents=True, exist_ok=True)
     chunk_paths = []
     chunk_no = 0
+    total_rows = 0
     for chunk in chunks:
         file_storage = chunk_storage_path.joinpath(f'cities{chunk_no}.parquet')
         chunk.to_parquet(path=file_storage, engine="pyarrow", compression="snappy", index=False)
         chunk_paths.append(str(file_storage)) 
         chunk_no += 1
+        total_rows += len(chunk)
+
+    emit_gauge(metric_name="pipeline/global/cities_requested", value=total_rows)
+
+    
     return chunk_paths
 
 def extract_cities_bigquery(country: str) -> list[str]:
@@ -85,11 +92,14 @@ def extract_cities_bigquery(country: str) -> list[str]:
     chunks = [df.iloc[i : i + chunk_size] for i in range(0,len(df), chunk_size)]
     chunk_paths = []
     chunk_no = 0
+    total_rows = 0
     for chunk in chunks:
         file_storage = get_data_path(f'data/cities_chunks/cities{chunk_no}.parquet')
         chunk.to_parquet(file_storage)
         chunk_paths.append(str(file_storage))
         chunk_no += 1
+        total_rows += len(chunk)
+    emit_gauge(metric_name="pipeline/global/cities_requested", value=total_rows)
     return chunk_paths
 
 
@@ -155,7 +165,7 @@ def to_decimal(value):
     """Convert value to decimal"""
     return None if pd.isna(value) else Decimal(str(float(value))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-def bq_upsert_tables(parquet_path: list[str], table_name: str, run_id: str) -> str:
+def bq_upsert_tables(parquet_path: list[str], table_name: str, run_id: str) -> tuple[str, int]:
     """Upsert data into BigQuery using a staging table"""
     run_id = re.sub(r'[^a-zA-Z0-9_]', '_', str(run_id))
     dataset = os.getenv("BQ_DATASET_NAME")
@@ -172,6 +182,7 @@ def bq_upsert_tables(parquet_path: list[str], table_name: str, run_id: str) -> s
     df = pd.concat(df_list, ignore_index=True)
     df['date'] = pd.to_datetime(df['date']).dt.date
     first_date = df['date'].iloc[0]
+    cities_loaded = df['city_id'].nunique()
 
     bq_client = bigquery.Client()
 
@@ -251,7 +262,7 @@ def bq_upsert_tables(parquet_path: list[str], table_name: str, run_id: str) -> s
             staging_table,
             not_found_ok=True
         )
-    return first_date
+    return first_date, cities_loaded
 
 def upsert_postgres(parquet_path: list[str], table_name: str):
     """Upsert data into Postgres"""
@@ -259,6 +270,7 @@ def upsert_postgres(parquet_path: list[str], table_name: str):
     df = pd.concat(df_list, ignore_index=True)
     df['date'] = pd.to_datetime(df['date']).dt.date
     first_date = df['date'].iloc[0]
+    cities_loaded = df['city_id'].nunique()
     # upsert_df.replace({np.nan: None}, inplace=True)
 
     hook = PostgresHook(postgres_conn_id='weather_db')
@@ -272,14 +284,14 @@ def upsert_postgres(parquet_path: list[str], table_name: str):
         target_fields=df.columns.to_list(),
         conflict_fields=['city_id', 'date']
     )
-    return first_date
+    return first_date, cities_loaded
 
 def load_data(parquet_path: list[str], table_name: str, run_id: str):
     """Upsert data based on storage type"""
     storage_type = os.getenv('STORAGE_BACKEND')
 
     if storage_type == 'local':
-        first_date = upsert_postgres(parquet_path, table_name)
+        first_date, cities_loaded = upsert_postgres(parquet_path, table_name)
     if storage_type == 'gcs':
-        first_date = bq_upsert_tables(parquet_path, table_name, run_id=run_id)
-    return first_date
+        first_date, cities_loaded = bq_upsert_tables(parquet_path, table_name, run_id=run_id)
+    return first_date, cities_loaded

@@ -387,3 +387,13 @@ resource "google_monitoring_metric_descriptor" "failed_validations" {
         description = "Source of the data that failed the validation"
     }
 }
+
+resource "google_monitoring_metric_descriptor" "cities_requested" {
+    project = var.project_id
+    description = "Number ofcities requested"
+    display_name = "Cities Requested"
+    type = "custom.googleapis.com/pipeline/global/cities_requested"
+    metric_kind = "GAUGE"
+    value_type = "DOUBLE"
+
+}
