@@ -154,7 +154,7 @@ with DAG(
     def upsert_data(parquet_paths: list[str], table_name: str, run_id: str) -> str:
         """Upsert data into Postgres or BigQuery"""
         from utils.db import load_data
-        processed_date = load_data(parquet_paths, table_name, run_id)
+        processed_date, cities_loaded = load_data(parquet_paths, table_name, run_id)
         return processed_date
 
     @task
