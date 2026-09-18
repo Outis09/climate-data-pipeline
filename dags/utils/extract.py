@@ -10,7 +10,8 @@ from utils.helpers import get_data_path
 import os
 from cloudpathlib import GSPath
 
-def extract_daily_climate(period: list, cities_chunk_path):    
+def extract_daily_climate(period: list[str], cities_chunk_path: str) -> list[str] | str:   
+    """Extract climate data from Open Meteo""" 
     storage_type = os.getenv('STORAGE_BACKEND')
     if storage_type == 'local':
         parquet_chunk_path = Path(cities_chunk_path)
@@ -123,10 +124,14 @@ def extract_daily_climate(period: list, cities_chunk_path):
         file_name = get_data_path(f"raw/daily_climate/{climate_date.year}/{climate_date.month:02d}/{climate_date.day:02d}/{chunk_id}.parquet")    
         data.to_parquet(file_name, engine='pyarrow', compression='snappy', index=False)
         file_names.append(str(file_name))
-    return file_names
+    if len(file_names) == 1:
+        return file_names[0]
+    else:
+        return file_names
 
 
-def extract_daily_air_quality(period, cities_chunk_path):
+def extract_daily_air_quality(period: list[str], cities_chunk_path: str) -> list[str] | str:
+    """Extract air quality data from Open Meteo"""
     storage_type = os.getenv('STORAGE_BACKEND')
 
     if storage_type == 'local':
@@ -213,10 +218,14 @@ def extract_daily_air_quality(period, cities_chunk_path):
         data.drop(columns=['day'], inplace=True)
         data.to_parquet(file_name, index=False)
         file_path.append(str(file_name))
-    return file_path
+    if len(file_path) == 1:
+        return file_path[0]
+    else:
+        return file_path
 
 
-def extract_daily_land_surface(period, cities_chunk_paths):
+def extract_daily_land_surface(period: list[str], cities_chunk_paths: str) -> list[str] | str:
+    """Extract land surface data from NASA Power"""
     storage_type = os.getenv('STORAGE_BACKEND')
     if storage_type == 'local':
         parquet_chunk_path = Path(cities_chunk_paths)
@@ -285,5 +294,8 @@ def extract_daily_land_surface(period, cities_chunk_paths):
         file_name = get_data_path(f"raw/daily_land_surface/{land_surface_date.year}/{land_surface_date.month:02d}/{land_surface_date.day:02d}/{chunk_id}.parquet")
         data.to_parquet(file_name, engine='pyarrow', compression='snappy', index=False)
         file_names.append(str(file_name))
-    return file_names
+    if len(file_names) == 1:
+        return file_names[0]
+    else:
+        return file_names
         

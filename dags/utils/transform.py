@@ -1,10 +1,18 @@
+import os
 import pandas as pd
 from pathlib import Path
+from cloudpathlib import GSPath
 from datetime import datetime, timedelta
 from utils.helpers import get_data_path
 
-def agg_hourly_air_quality(parquet_paths):
-    dfs = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
+def agg_hourly_air_quality(parquet_paths: list[str]) -> list[str]:
+    """Aggregate hourly data into daily"""
+    storage_type = os.getenv('STORAGE_BACKEND')
+    if storage_type == 'local':
+        dfs = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in parquet_paths]
+    else:
+        dfs = [pd.read_parquet(GSPath(parquet_path), engine='pyarrow') for parquet_path in parquet_paths]
+    
     df = pd.concat(dfs, ignore_index=True)
 
     df['date'] = pd.to_datetime(df['date'])
@@ -49,8 +57,13 @@ def agg_hourly_air_quality(parquet_paths):
 
     return file_paths
 
-def transform_daily_climate_chunks(raw_parquet_paths):
-    consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in raw_parquet_paths]
+def transform_daily_climate_chunks(raw_parquet_paths: list[str]) -> list[str]:
+    """Consolidate and standardize data"""
+    storage_type = os.getenv('STORAGE_BACKEND')
+    if storage_type == 'local':
+        consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in raw_parquet_paths]
+    else:
+        consolidated_df_list = [pd.read_parquet(GSPath(parquet_path), engine='pyarrow') for parquet_path in raw_parquet_paths]
     consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
 
     file_paths = []
@@ -65,8 +78,13 @@ def transform_daily_climate_chunks(raw_parquet_paths):
         file_paths.append(str(parquet_path))
     return file_paths
 
-def transform_daily_land_surface(raw_parquet_paths):
-    consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in raw_parquet_paths]
+def transform_daily_land_surface(raw_parquet_paths: list[str]) -> list[str]:
+    """Consolidate data and standardize headers"""
+    storage_type = os.getenv('STORAGE_BACKEND')
+    if storage_type == 'local':
+        consolidated_df_list = [pd.read_parquet(parquet_path, engine='pyarrow') for parquet_path in raw_parquet_paths]
+    else:
+        consolidated_df_list = [pd.read_parquet(GSPath(parquet_path), engine='pyarrow') for parquet_path in raw_parquet_paths]
     consolidated_df = pd.concat(consolidated_df_list, ignore_index=True)
 
     consolidated_df.rename(columns={

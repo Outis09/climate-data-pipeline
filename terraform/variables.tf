@@ -85,3 +85,15 @@ variable "remote_uri" {
   description = "The remote URI of the GitHub repository"
   type        = string
  }
+
+variable "enable_ci_cd" {
+  description = "Flag to enable or disable CI/CD setup"
+  type        = bool
+  default     = false
+}
+
+variable "user_email" {
+  description = "The email of the user for receiving notifications about pipeline failures/success"
+  type        = string
+  default     = ""
+}
