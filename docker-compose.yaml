@@ -413,6 +413,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD not set}
     depends_on:
       - prometheus
+    restart: always
 
 
 configs:
