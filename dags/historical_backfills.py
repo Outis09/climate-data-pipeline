@@ -95,7 +95,7 @@ with DAG(
             periods.append([year_start.strftime('%Y-%m-%d'), year_end.strftime('%Y-%m-%d')])
 
         num_years = len(years)
-        emit_gauge("pipeline/backfill/years_requested", value=num_years)
+        emit_gauge("pipeline/historical/years_requested", value=num_years)
         # stats.gauge("pipeline.backfill.years_requested", value=num_years)
         return periods
 
@@ -158,7 +158,7 @@ with DAG(
         return processed_date
 
     @task
-    def emit_year_processed_metric(processed_date, metric_name: str):
+    def emit_year_processed_metric(processed_date, source: str):
         """Emit year processed as a metric"""
         from utils.metrics import emit_gauge
         try:
@@ -166,7 +166,7 @@ with DAG(
         except:
             processed_date = processed_date
         # stats.gauge(stat=metric_name, value=1, tags={"year": str(processed_date.year)})
-        emit_gauge(metric_name=metric_name, value=1, labels={"year": str(processed_date.year)})
+        emit_gauge(metric_name="pipeline/historical/years_processed", value=1, labels={"year": str(processed_date.year), "source": source})
 
 
 
@@ -199,7 +199,7 @@ with DAG(
 
         upsert_climate = upsert_data.override(task_id="upsert_climate")(table_name='daily_climate', parquet_paths=validate_climate)
 
-        emit_climate_year_processed_metric = emit_year_processed_metric.override(task_id="emit_climate_year_processed")(processed_date=upsert_climate, metric_name="pipeline.backfill.climate.years_processed")
+        emit_climate_year_processed_metric = emit_year_processed_metric.override(task_id="emit_climate_year_processed")(processed_date=upsert_climate, source="climate")
 
 
     # task group for depth-first execution of air quality tasks
@@ -222,7 +222,7 @@ with DAG(
 
         upsert_air_quality = upsert_data.override(task_id="upsert_air_quality")(table_name="daily_air_quality", parquet_paths=validate_air_quality)
 
-        emit_air_quality_year_processed_metric = emit_year_processed_metric.override(task_id="emit_air_quality_year_processed")(processed_date=upsert_air_quality, metric_name="pipeline.backfill_air_quality.years_processed")
+        emit_air_quality_year_processed_metric = emit_year_processed_metric.override(task_id="emit_air_quality_year_processed")(processed_date=upsert_air_quality, source="air_quality")
 
 
     # task group for depth-first execution of land surface tasks
@@ -236,7 +236,7 @@ with DAG(
 
         upsert_land_surface = upsert_data.override(task_id="upsert_land_surface")(table_name='daily_land_surface', parquet_paths=validate_land_surface)
 
-        emit_climate_year_processed_metric = emit_year_processed_metric.override(task_id="emit_land_surface_year_processed")(processed_date=upsert_land_surface, metric_name="pipeline.backfill.land_surface.years_processed")
+        emit_climate_year_processed_metric = emit_year_processed_metric.override(task_id="emit_land_surface_year_processed")(processed_date=upsert_land_surface, source="land_surface")
 
 
     cities = get_cities()
