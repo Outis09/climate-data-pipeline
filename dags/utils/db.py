@@ -9,7 +9,7 @@ from utils.helpers import get_data_path
 import re
 from decimal import Decimal, ROUND_HALF_UP
 from cloudpathlib import GSPath
-from metrics import emit_gauge
+from utils.metrics import emit_gauge
 
 
 
