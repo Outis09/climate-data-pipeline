@@ -16,11 +16,19 @@ def create_daily_climate_pre_load_suite(context: FileDataContext):
                          'rain_sum', 'snowfall_sum', 'river_discharge', 'pressure_msl_mean']
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectTableColumnsToMatchSet(
-        column_set=climate_cols
+        column_set=climate_cols,
+        meta={
+            "failure_scope": "batch",
+            "failure_reason": "Batch columns do not match expected set"
+        }
     ))
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectCompoundColumnsToBeUnique(
-        column_list=climate_cols[:2]
+        column_list=climate_cols[:2],
+        meta={
+            "failure_scope": "batch",
+            "failure_reason": "Duplicate in city id and date combinations"
+        }
     ))
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectColumnPairValuesAToBeGreaterThanB(
@@ -28,7 +36,11 @@ def create_daily_climate_pre_load_suite(context: FileDataContext):
         column_B='temperature_2m_mean',
         or_equal=True,
         mostly=1.0,
-        severity='warning'
+        severity='warning',
+        meta={
+            "failure_scope": "row",
+            "failure_reason": "temperature_2m_mean is greater than temperature_2m_max"
+        }
     ))
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectColumnPairValuesAToBeGreaterThanB(
@@ -36,7 +48,11 @@ def create_daily_climate_pre_load_suite(context: FileDataContext):
         column_B='temperature_2m_min',
         or_equal=True,
         mostly=1.0,
-        severity='warning'
+        severity='warning',
+        meta={
+            "failure_scope": "row",
+            "failure_reason": "temperature_2m_min is greater than temperature_2m_mean"
+        }
     ))
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectColumnPairValuesAToBeGreaterThanB(
@@ -44,7 +60,11 @@ def create_daily_climate_pre_load_suite(context: FileDataContext):
         column_B='relative_humidity_2m_mean',
         or_equal=True,
         mostly=1.0,
-        severity='warning'
+        severity='warning',
+        meta={
+            "failure_scope": "row",
+            "failure_reason": "relative_humidity_2m_mean is greater than relative_humidity_2m_max"
+        }
     ))
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectColumnPairValuesAToBeGreaterThanB(
@@ -52,7 +72,11 @@ def create_daily_climate_pre_load_suite(context: FileDataContext):
             column_B='relative_humidity_2m_min',
             or_equal=True,
             mostly=1.0,
-            severity='warning'
+            severity='warning',
+            meta={
+                "failure_scope": "row",
+                "failure_reason": "relative_humidity_2m_min is greater than relative_humidity_2m_mean"
+            }
         ))    
 
     percentage_cols = ['relative_humidity_2m_max', 'relative_humidity_2m_min', 'relative_humidity_2m_mean', 'cloud_cover_mean']
@@ -61,14 +85,22 @@ def create_daily_climate_pre_load_suite(context: FileDataContext):
             column=percentage_col,
             min_value=0,
             max_value=100,
-            mostly=1.0
+            mostly=1.0,
+            meta={
+                "failure_row": "row",
+                "failure_reason": f"{percentage_col} is greater than 100 or less than 0"
+            }
         ))
 
     pre_load_climate_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
         column='soil_moisture_0_to_10cm_mean',
         min_value=0,
         max_value=1,
-        mostly=1.0
+        mostly=1.0,
+        meta={
+            "failure_row": "row",
+            "failure_reason": "soil_moisture_0_to_10cm_mean is greater than 1 or less than 0"
+        }
     ))
 
     non_negative_cols = ['wind_speed_10m_mean', 'wind_speed_10m_max', 'shortwave_radiation_sum', 'soil_moisture_0_to_10cm_mean', 'precipitation_sum',
@@ -78,7 +110,11 @@ def create_daily_climate_pre_load_suite(context: FileDataContext):
             column=non_negative_col,
             min_value=0,
             max_value=None,
-            mostly=1.0
+            mostly=1.0,
+            meta={
+                "failure_row": "row",
+                "failure_reason": f"{non_negative_col} is negative"
+            }
         ))
 
 
@@ -91,11 +127,19 @@ def create_daily_air_quality_pre_load_suite(context: FileDataContext):
     air_quality_cols = ['city_id','date','pm2_5_mean', 'pm10_mean', 'nitrogen_dioxide_1h_max', 'sulphur_dioxide_1h_max', 'ozone_8h_max', 'carbon_dioxide_mean', 'carbon_monoxide_8h_max']
 
     pre_load_air_quality_suite.add_expectation(gx.expectations.ExpectTableColumnsToMatchSet(
-        column_set=air_quality_cols
+        column_set=air_quality_cols,
+        meta={
+            "failure_scope": "batch",
+            "failure_reason": "Batch columns do not match expected set"
+        }
     ))
 
     pre_load_air_quality_suite.add_expectation(gx.expectations.ExpectCompoundColumnsToBeUnique(
-        column_list=air_quality_cols[:2]
+        column_list=air_quality_cols[:2],
+        meta={
+            "failure_scope": "batch",
+            "failure_reason": "Duplicate in city id and date combinations"
+        }
     ))
 
     for air_quality_col in air_quality_cols[2:]:
@@ -103,7 +147,11 @@ def create_daily_air_quality_pre_load_suite(context: FileDataContext):
             column=air_quality_col,
             min_value=0,
             max_value=None,
-            mostly=1.0
+            mostly=1.0,
+        meta={
+            "failure_row": "row",
+            "failure_reason": f"{air_quality_col} is less than 0"
+        }
         ))
 
 def create_daily_land_surface_pre_load_suite(context: FileDataContext):
@@ -117,49 +165,77 @@ def create_daily_land_surface_pre_load_suite(context: FileDataContext):
                          'surface_longwave_upward_irradiance', 'total_solar_irradiance', 'all_sky_surface_albedo']
 
     pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectTableColumnsToMatchSet(
-        column_set=land_surface_cols
+        column_set=land_surface_cols,
+        meta={
+            "failure_scope": "batch",
+            "failure_reason": "Batch columns do not match expected set"
+        }
     ))
 
     pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectCompoundColumnsToBeUnique(
-            column_list=land_surface_cols[:2]
+            column_list=land_surface_cols[:2],
+        meta={
+            "failure_scope": "batch",
+            "failure_reason": "Duplicate in city id and date combinations"
+        }
         ))
 
     pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
         column=land_surface_cols[5],
         min_value=-125,
         max_value=80,
-        mostly=1.0
+        mostly=1.0,
+        meta={
+            "failure_row": "row",
+            "failure_reason": "land_surface_temp is greater than 80 or less than -125"
+        }
     ))
 
     pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
             column=land_surface_cols[3],
             min_value=0,
             max_value=100,
-            mostly=1.0
+            mostly=1.0,
+            meta={
+                "failure_row": "row",
+                "failure_reason": "total_precipitable_water is greater than 100 or less than 0"
+            }
         ))
 
     for zero_one_col in [land_surface_cols[6], land_surface_cols[11]]:
         pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
-                column=zero_one_col,
-                min_value=0,
-                max_value=1,
-                mostly=1.0
+            column=zero_one_col,
+            min_value=0,
+            max_value=1,
+            mostly=1.0,
+            meta={
+                "failure_row": "row",
+                "failure_reason": f"{zero_one_col} is greater than 1 or less than 0"
+            }
             ))
 
     for five_hun_thou_one_col in [land_surface_cols[2], land_surface_cols[4]]:
         pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
-                        column=five_hun_thou_one_col,
-                        min_value=500,
-                        max_value=1100,
-                        mostly=1.0
+            column=five_hun_thou_one_col,
+            min_value=50,
+            max_value=110,
+            mostly=1.0,
+            meta={
+                "failure_row": "row",
+                "failure_reason": f"{five_hun_thou_one_col} is outside the valid range: 50-110 kpa"
+            }
             ))
 
     for zero_thou_five_col in land_surface_cols[7:11]:
         pre_load_land_surface_suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
-                column=zero_thou_five_col,
-                min_value=0,
-                max_value=1500,
-                mostly=1.0
+            column=zero_thou_five_col,
+            min_value=0,
+            max_value=1500,
+            mostly=1.0,
+            meta={
+                "failure_row": "row",
+                "failure_reason": f"{zero_thou_five_col} is greater than 1500 or less than 0"
+            }
             ))
 
     
@@ -228,6 +304,10 @@ def configure_checkpoint(context: FileDataContext, api_source: str, storage_type
     checkpoint = gx.Checkpoint(
             name=f"daily_{api_source}_checkpoint",
             validation_definitions=[validation_definition],
+            result_format={
+                "result_format": "COMPLETE",
+                "unexpected_index_column_names": ["city_id", "date"]
+            },
             actions=[]
         )
     

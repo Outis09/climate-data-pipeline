@@ -5,6 +5,7 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 from google.cloud import bigquery
 from google.cloud import storage
 import os
+from collections import defaultdict
 from utils.helpers import get_data_path
 import re
 from decimal import Decimal, ROUND_HALF_UP
@@ -165,12 +166,30 @@ def to_decimal(value):
     """Convert value to decimal"""
     return None if pd.isna(value) else Decimal(str(float(value))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-def bq_upsert_tables(parquet_path: list[str], table_name: str, run_id: str) -> tuple[str, int]:
+def get_table_config(table_name: str) -> dict:
+    """Get config for main or dead-letter table."""
+
+    if table_name.startswith("dead_letter_"):
+        source = table_name.removeprefix("dead_letter_")
+        main_table_name = f"daily_{source}"
+
+        config = main_table_config[main_table_name]
+
+        return {
+            "keys": config["keys"],
+            "columns": config["columns"] + [
+                "failure_reasons"
+            ],
+        }
+
+    return main_table_config[table_name]
+
+def bq_upsert_tables(df: pd.DataFrame, table_name: str, run_id: str) -> None:
     """Upsert data into BigQuery using a staging table"""
     run_id = re.sub(r'[^a-zA-Z0-9_]', '_', str(run_id))
     dataset = os.getenv("BQ_DATASET_NAME")
 
-    config = main_table_config[table_name]
+    config = get_table_config(table_name)
 
     keys = config["keys"]
     columns = config["columns"]
@@ -178,11 +197,6 @@ def bq_upsert_tables(parquet_path: list[str], table_name: str, run_id: str) -> t
     target_table = f"{dataset}.{table_name}"
     staging_table = f"{dataset}.{table_name}_{run_id}_staging"
 
-    df_list = [pd.read_parquet(GSPath(path)) for path in parquet_path]
-    df = pd.concat(df_list, ignore_index=True)
-    df['date'] = pd.to_datetime(df['date']).dt.date
-    first_date = df['date'].iloc[0]
-    cities_loaded = df['city_id'].nunique()
 
     bq_client = bigquery.Client()
 
@@ -262,16 +276,10 @@ def bq_upsert_tables(parquet_path: list[str], table_name: str, run_id: str) -> t
             staging_table,
             not_found_ok=True
         )
-    return first_date, cities_loaded
+    return None
 
-def upsert_postgres(parquet_path: list[str], table_name: str):
+def upsert_postgres(df: pd.DataFrame, table_name: str) -> None:
     """Upsert data into Postgres"""
-    df_list = [pd.read_parquet(path) for path in parquet_path]
-    df = pd.concat(df_list, ignore_index=True)
-    df['date'] = pd.to_datetime(df['date']).dt.date
-    first_date = df['date'].iloc[0]
-    cities_loaded = df['city_id'].nunique()
-    # upsert_df.replace({np.nan: None}, inplace=True)
 
     hook = PostgresHook(postgres_conn_id='weather_db')
 
@@ -284,14 +292,41 @@ def upsert_postgres(parquet_path: list[str], table_name: str):
         target_fields=df.columns.to_list(),
         conflict_fields=['city_id', 'date']
     )
-    return first_date, cities_loaded
+    return None
 
-def load_data(parquet_path: list[str], table_name: str, run_id: str):
+def load_data(load_vars: tuple[list[str], defaultdict], table_name: str, run_id: str):
     """Upsert data based on storage type"""
     storage_type = os.getenv('STORAGE_BACKEND')
 
-    if storage_type == 'local':
-        first_date, cities_loaded = upsert_postgres(parquet_path, table_name)
-    if storage_type == 'gcs':
-        first_date, cities_loaded = bq_upsert_tables(parquet_path, table_name, run_id=run_id)
-    return first_date, cities_loaded
+    parquet_paths = load_vars[0]
+    failed_rows = load_vars[1]
+
+    df_list = [pd.read_parquet(path) for path in parquet_paths]
+    full_df = pd.concat(df_list, ignore_index=True)
+    full_df['date'] = pd.to_datetime(full_df['date']).dt.date
+    full_df['city_id'] = full_df["city_id"].astype(int)
+    first_date = full_df["date"].iloc[0]
+
+    if not failed_rows:
+        if storage_type == 'local':
+            upsert_postgres(df=full_df, table_name=table_name)
+        elif storage_type == 'gcs':
+            bq_upsert_tables(df=full_df, table_name=table_name, run_id=run_id)
+    else:
+        failures_df = pd.DataFrame([{"city_id": city_id, "date": date, "failure_reasons": reasons} for (city_id, date), reasons in failed_rows.items()])
+        failures_df['date'] = pd.to_datetime(failures_df['date']).dt.date
+        failures_df['city_id'] = failures_df['city_id'].astype(int)
+
+        merged_df = pd.merge(full_df, failures_df, how='left', on=['city_id', "date"])
+
+        dead_letter_df = merged_df[merged_df['failure_reasons'].notna()].copy()
+        good_df = merged_df[merged_df['failure_reasons'].isna()].drop(columns='failure_reasons')
+
+        dead_letter_table = table_name.replace('daily', 'dead_letter')
+        if storage_type == 'local':
+            upsert_postgres(df=good_df, table_name=table_name)
+            upsert_postgres(df=dead_letter_df, table_name=dead_letter_table)
+        if storage_type == 'gcs':
+            bq_upsert_tables(df=good_df, table_name=table_name, run_id=run_id)
+            bq_upsert_tables(df=dead_letter_df, table_name=dead_letter_table, run_id=run_id)
+    return first_date
