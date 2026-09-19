@@ -408,6 +408,7 @@ services:
     volumes:
       - grafana-storage:/var/lib/grafana
       - ./include/grafana/provisioning:/etc/grafana/provisioning
+      - ./include/grafana/dashboards:/var/lib/grafana/dashboards
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER not set}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD not set}
