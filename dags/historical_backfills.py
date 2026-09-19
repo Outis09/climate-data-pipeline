@@ -1,3 +1,4 @@
+import os
 import pendulum
 from airflow.sdk import DAG, task, task_group
 from datetime import datetime
@@ -10,11 +11,13 @@ from utils.custom.operators import QuotaAwareOpenMeteoExtractionOperator
 from airflow.providers.smtp.notifications.smtp import SmtpNotifier
 
 
+recipient_email = os.getenv('NOTIFICATION_EMAIL')
+
 
 # email template to send when task fails
 task_fail_notify = SmtpNotifier(
         smtp_conn_id="smtp_default",
-        to="sshakurace@gmail.com",
+        to=recipient_email,
         subject="Airflow Failure: {{ ti.task_id }} in {{ dag.dag_id }}",
         html_content="""
     <h3>Task Failure Alert</h3>
