@@ -21,7 +21,7 @@ def _create_dags_list(dags_directory: str) -> tuple[str, list[str]]:
 
     # The only Python files left in our temp directory are DAG files
     # so we can exclude all non Python files
-    dags = glob.glob(f"{temp_dir}/*.py")
+    dags = glob.glob(f"{temp_dir}/**/*.py", recursive=True)
     return (temp_dir, dags)
 
 
