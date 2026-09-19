@@ -12,6 +12,21 @@ locals {
     "cloudbuild.googleapis.com",
     "secretmanager.googleapis.com",
   ])
+
+  climate_schema = jsondecode(file("${path.module}/bigquery_schemas/daily_climate.json"))
+  air_quality_schema = jsondecode(file("${path.module}/bigquery_schemas/daily_air_quality.json"))
+  land_surface_schema = jsondecode(file("${path.module}/bigquery_schemas/daily_land_surface.json"))
+  dead_letter_field = jsonencode([{
+    
+      name = "failure_reasons"
+      type = "STRING"
+      mode = "REPEATED"
+    }]
+    )
+
+   dead_letter_climate = merge(local.climate_schema, local.dead_letter_field)
+   dead_letter_air_quality = merge(local.air_quality_schema, local.dead_letter_field)
+   dead_letter_land_surface = merge(local.land_surface_schema, local.dead_letter_field)
 }
 
 resource "google_project_service" "required_apis" {
@@ -91,6 +106,25 @@ resource "google_bigquery_table" "climate_data_table" {
   
 }
 
+resource "google_bigquery_table" "dead_letter_climate_data_table" {
+  provider = google-beta
+  dataset_id = google_bigquery_dataset.climate_data.dataset_id
+  table_id   = "dead_letter_climate"
+  project    = var.project_id
+
+  schema = local.dead_letter_climate
+
+  time_partitioning {
+    type = "DAY"
+    field = "date"
+  }
+
+  clustering = ["city_id"]
+
+  deletion_protection = false
+  
+}
+
 resource "google_bigquery_table" "air_quality_data_table" {
   provider = google-beta
   dataset_id = google_bigquery_dataset.climate_data.dataset_id
@@ -98,6 +132,25 @@ resource "google_bigquery_table" "air_quality_data_table" {
   project    = var.project_id
 
   schema = file("${path.module}/bigquery_schemas/daily_air_quality.json")
+
+  time_partitioning {
+    type = "DAY"
+    field = "date"
+  }
+
+  clustering = ["city_id"]
+
+  deletion_protection = false
+}
+
+
+resource "google_bigquery_table" "dead_letter_air_quality_data_table" {
+  provider = google-beta
+  dataset_id = google_bigquery_dataset.climate_data.dataset_id
+  table_id   = "dead_letter_air_quality"
+  project    = var.project_id
+
+  schema = local.dead_letter_air_quality
 
   time_partitioning {
     type = "DAY"
@@ -128,6 +181,23 @@ resource "google_bigquery_table" "land_surface_data_table" {
 }
 
 
+resource "google_bigquery_table" "dead_letter_land_surface_data_table" {
+  provider = google-beta
+  dataset_id = google_bigquery_dataset.climate_data.dataset_id
+  table_id   = "dead_letter_land_surface"
+  project    = var.project_id
+
+  schema = local.dead_letter_land_surface
+
+    time_partitioning {
+        type = "DAY"
+        field = "date"
+    }
+
+    clustering = ["city_id"]
+
+    deletion_protection = false
+}
 
 resource "google_project_iam_member" "climate_pipeline_account_bq_job_user" {
   provider = google-beta
