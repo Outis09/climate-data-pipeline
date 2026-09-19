@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 import pendulum
 from airflow.sdk import DAG, task, task_group
 from datetime import datetime
@@ -154,10 +155,10 @@ with DAG(
         return validated_paths
 
     @task(pool="db_upsert_pool")
-    def upsert_data(parquet_paths: list[str], table_name: str, run_id: str) -> str:
+    def upsert_data(parquet_paths: tuple[list[str], defaultdict], table_name: str, run_id: str) -> str:
         """Upsert data into Postgres or BigQuery"""
         from utils.db import load_data
-        processed_date, cities_loaded = load_data(parquet_paths, table_name, run_id)
+        processed_date = load_data(parquet_paths, table_name, run_id)
         return processed_date
 
     @task
