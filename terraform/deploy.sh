@@ -144,11 +144,9 @@ if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$P
     exit 1
 fi
 
-# trigger the historical data extraction dag to run
-if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" dags trigger -- historical_backfill 2>&1 | tee -a "$LOG_FILE"; then
-    echo "Error triggering historical_backfill DAG. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
-    exit 1
-fi
+
+
+
 
 
 GITHUB_CONNECTION_NAME=$(terraform output -raw github_connection_name)
