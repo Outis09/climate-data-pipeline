@@ -199,6 +199,7 @@ resource "google_composer_environment" "climate_data_environment" {
       CLIMATE_COUNTRY = var.climate_country
       START_DATE = var.historical_data_start_date
       GCP_LOCATION = var.region
+      NOTIFICATION_EMAIL = var.recipient_email
     }
     }
 

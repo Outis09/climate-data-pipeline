@@ -14,10 +14,11 @@ from utils.extract import extract_daily_climate, extract_daily_air_quality
 from utils.custom.operators import QuotaAwareOpenMeteoExtractionOperator
 
 
+recipient_email = os.getenv('NOTIFICATION_EMAIL')
 
 task_fail_notify = SmtpNotifier(
         smtp_conn_id="smtp_default",
-        to="sshakurace@gmail.com",
+        to=recipient_email,
         subject="Airflow Failure: {{ ti.task_id }} in {{ dag.dag_id }}",
         html_content="""
     <h3>Task Failure Alert</h3>

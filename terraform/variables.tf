@@ -93,6 +93,12 @@ variable "enable_ci_cd" {
 }
 
 variable "user_email" {
+  description = "The email of the user for sending notifications about pipeline failures/success"
+  type        = string
+  default     = ""
+}
+
+variable "recipient_email" {
   description = "The email of the user for receiving notifications about pipeline failures/success"
   type        = string
   default     = ""
