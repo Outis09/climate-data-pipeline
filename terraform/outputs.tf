@@ -57,3 +57,7 @@ output "cloud_build_add_dags_to_composer_sa" {
 output "user_email" {
     value = var.user_email
 }
+
+output "enable_cicd" {
+  value = var.enable_ci_cd
+}
