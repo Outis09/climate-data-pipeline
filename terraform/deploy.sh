@@ -118,6 +118,10 @@ if ! gcloud storage cp ../include/init-scripts/setup_gx.py "$COMPOSER_DATA_GCS_P
     exit 1
 fi
 
+echo "Waiting for 2 minutes for dags to become available in Cloud Composer..."
+
+sleep 120
+
 # unpausing the setup_gx dag to run
 if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" dags unpause -- setup_great_expectations 2>&1 | tee -a "$LOG_FILE"; then
     echo "Error unpausing setup_great_expectations DAG. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
