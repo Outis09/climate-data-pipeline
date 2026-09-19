@@ -3,7 +3,7 @@ from collections.abc import Callable
 from airflow.sdk import BaseOperator, Context
 from airflow.sdk.observability import stats
 from airflow.providers.standard.triggers.temporal import TimeDeltaTrigger
-from airflow.sdk.exceptions import AirflowException
+from airflow.sdk.exceptions import AirflowException, AirflowSkipException
 from utils.metrics import emit_cumulative
 
 class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
@@ -28,6 +28,8 @@ class QuotaAwareOpenMeteoExtractionOperator(BaseOperator):
                     completed_paths.append(result)
                 else:
                     completed_paths.extend(result)
+            except AirflowSkipException:
+                raise
             except Exception as error:
                 if isinstance(error, dict):
                     reason = error.get("reason", "").lower()
