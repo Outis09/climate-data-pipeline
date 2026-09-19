@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from airflow.sdk.exceptions import AirflowException
 import os
+from collections import defaultdict
 from cloudpathlib import GSPath
 from pathlib import PurePath
 from utils.metrics import emit_cumulative
@@ -16,7 +17,7 @@ def get_date_from_path(parquet_path: str) -> tuple[int, int, int]:
 
     return year, month, day
 
-def run_validation(api_source: str, parquet_paths: list[str]) -> list[str]:
+def run_validation(api_source: str, parquet_paths: list[str]) -> tuple[list[str], defaultdict]:
     """Validate data using Great Expectations Checkpoint"""
     storage_type = os.getenv('STORAGE_BACKEND')
     if storage_type == 'local':
@@ -29,6 +30,7 @@ def run_validation(api_source: str, parquet_paths: list[str]) -> list[str]:
     checkpoint = gx_context.checkpoints.get(f"daily_{api_source}_checkpoint") 
 
     validated_paths = []
+    failed_rows = defaultdict(list)
 
     for parquet_path in parquet_paths:
         year, month, day = get_date_from_path(parquet_path)    
@@ -39,11 +41,34 @@ def run_validation(api_source: str, parquet_paths: list[str]) -> list[str]:
         validation_result_id = list(result.run_results.keys())[0]
         validation_result = result.run_results[validation_result_id]
 
-        if validation_result.get_max_severity_failure() == "CRITICAL":
-            emit_cumulative(metric_name="pipeline/global/gx_validations/failed_validations", value=1, labels={"api_source": api_source}) 
-        # if not result.success:
-            raise AirflowException(
-                f"{api_source} data failed GX validation for {year}/{month}/{day:02d}"
-            )
-        validated_paths.append(parquet_path)
-    return validated_paths
+        max_severity = validation_result.get_max_severity_failure()
+
+        if not max_severity or max_severity.value != "critical":
+            validated_paths.append(parquet_path)
+            continue
+
+        for expectation_result in validation_result.results:
+            if expectation_result.success:
+                continue
+
+            if expectation_result.expectation_config.severity != 'critical':
+                continue
+
+            meta = expectation_result.expectation_config.meta
+
+            if meta['failure_reason'] == 'batch':
+                raise AirflowException(f"{api_source} data failed GX validation for {year}/{month}/{day:02d}: {meta['failure_reason']}")
+
+            for index in expectation_result.result.get("unexpected_index_list", []):
+                key = (int(index['city_id']), index['date'])
+
+                failed_rows[key].append(meta['failure_reason'])
+
+        # if validation_result.get_max_severity_failure() == "CRITICAL":
+        #     emit_cumulative(metric_name="pipeline/global/gx_validations/failed_validations", value=1, labels={"api_source": api_source}) 
+        # # if not result.success:
+        #     raise AirflowException(
+        #         f"{api_source} data failed GX validation for {year}/{month}/{day:02d}"
+        #     )
+        # validated_paths.append(parquet_path)
+    return  validated_paths, failed_rows
