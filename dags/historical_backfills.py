@@ -217,7 +217,7 @@ with DAG(
             retries=2,
             pool="open_meteo_extraction_pool",
             pool_slots=1,
-            priority_weight=10
+            priority_weight=20
         )
 
         transform_air_quality = consolidate_daily_air_quality(parquet_paths=extract.output)
