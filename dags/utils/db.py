@@ -5,6 +5,8 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 from google.cloud import bigquery
 from google.cloud import storage
 import os
+from datetime import date
+import calendar
 from collections import defaultdict
 from utils.helpers import get_data_path
 import re
@@ -330,3 +332,87 @@ def load_data(load_vars: tuple[list[str], defaultdict], table_name: str, run_id:
             bq_upsert_tables(df=good_df, table_name=table_name, run_id=run_id)
             bq_upsert_tables(df=dead_letter_df, table_name=dead_letter_table, run_id=run_id)
     return first_date
+
+
+def fetch_last_radiation_data_bigquery() -> str | None:
+    """Get last date with full radiation data from bigquery"""
+    bq_client = bigquery.Client()
+    dataset = os.getenv('BQ_DATASET_NAME')
+
+    query = f"""
+    SELECT max(date) as max_date
+    FROM `{dataset}.daily_land_surface`
+    WHERE surface_longwave_downward_irradiance IS NOT NULL AND
+            surface_shortwave_upward_irradiance IS NOT NULL AND
+            surface_longwave_upward_irradiance IS NOT NULL AND
+            total_solar_irradiance IS NOT NULL AND
+            all_sky_surface_albedo IS NOT NULL;
+    """
+
+    result = bq_client.query(query).result()
+    row = next(result)
+
+    if row.max_date is None:
+        return None
+
+    return row.max_date.strftime("%Y-%m-%d")
+
+def fetch_last_radiation_data_postgres() -> str | None:
+    """Get last date with full radiation data from postgres db"""
+    hook = PostgresHook(postgres_conn_id='weather_db')
+    sql_query = """
+    SELECT  max(date) as max_date
+    FROM climate.daily_land_surface
+    WHERE surface_longwave_downward_irradiance IS NOT NULL AND surface_longwave_downward_irradiance != 'NaN' AND
+          surface_shortwave_upward_irradiance IS NOT NULL AND surface_shortwave_upward_irradiance != 'NaN' AND
+          surface_longwave_upward_irradiance IS NOT NULL AND surface_longwave_upward_irradiance != 'NaN' AND
+          total_solar_irradiance IS NOT NULL AND total_solar_irradiance != 'NaN' AND
+          all_sky_surface_albedo IS NOT NULL AND all_sky_surface_albedo != 'NaN'
+    LIMIT 1;
+    """
+
+    row = hook.get_first(sql_query)
+
+    if row is None or row[0] is None:
+        return None
+
+    return row[0].isoformat()
+
+def fetch_next_radiation_period() -> tuple[str, str]:
+    """Get last date with full radiation data"""
+    storage_type = os.getenv('STORAGE_BACKEND')
+    if storage_type == 'local':
+        max_date = fetch_last_radiation_data_postgres()
+    elif storage_type == 'gcs':
+        max_date = fetch_last_radiation_data_bigquery()
+
+    
+    max_date = date.fromisoformat(max_date)
+
+    # Last day of max_date's month
+    last_day = calendar.monthrange(
+        max_date.year,
+        max_date.month
+    )[1]
+
+    current_month_end = max_date.replace(day=last_day)
+
+    if max_date == current_month_end:
+        # Current month is complete, move to next month
+        if max_date.month == 12:
+            start_date = date(max_date.year + 1, 1, 1)
+        else:
+            start_date = date(max_date.year, max_date.month + 1, 1)
+
+    else:
+        # Current month is incomplete, reprocess the whole month
+        start_date = max_date.replace(day=1)
+
+    end_day = calendar.monthrange(
+        start_date.year,
+        start_date.month
+    )[1]
+
+    end_date = start_date.replace(day=end_day)
+
+    return start_date.isoformat(), end_date.isoformat()

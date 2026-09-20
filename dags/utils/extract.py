@@ -224,7 +224,7 @@ def extract_daily_air_quality(period: list[str], cities_chunk_path: str) -> list
         return file_path
 
 
-def extract_daily_land_surface(period: list[str], cities_chunk_paths: str) -> list[str] | str:
+def extract_daily_land_surface(period: list[str], cities_chunk_paths: str, request='full') -> list[str] | str:
     """Extract land surface data from NASA Power"""
     storage_type = os.getenv('STORAGE_BACKEND')
     if storage_type == 'local':
@@ -282,11 +282,19 @@ def extract_daily_land_surface(period: list[str], cities_chunk_paths: str) -> li
         data_df['date'] = pd.to_datetime(data_df['date'], format="%Y%m%d").dt.strftime("%Y-%m-%d")
         data_df['city_id'] = city_id
 
+        if request == 'radiation':
+            radiation_cols = ['ALLSKY_SFC_LW_DWN', 'ALLSKY_SFC_SW_UP', 'ALLSKY_SFC_LW_UP', 'TOA_SW_DWN', 'ALLSKY_SRF_ALB']
+            radiation_df = data_df[radiation_cols]
+            if (radiation_df == -999.0).all().all():
+                raise AirflowSkipException(f"Radiation data not yet available for {start_date} to {end_date}")
+            elif (radiation_df == -999.0).any().any():
+                raise AirflowException(f"Incomplete radiation for {start_date} to {end_date}")
+
         records.append(data_df)
         time.sleep(1)
 
     
-
+    
     land_surface = pd.concat(records) #pd.DataFrame(records)
     file_names = []
     for land_surface_date, data in land_surface.groupby('date'):
@@ -298,4 +306,3 @@ def extract_daily_land_surface(period: list[str], cities_chunk_paths: str) -> li
         return file_names[0]
     else:
         return file_names
-        
