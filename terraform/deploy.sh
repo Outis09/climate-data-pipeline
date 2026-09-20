@@ -153,6 +153,12 @@ if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$P
     exit 1
 fi
 
+# unpausing the climate dag to run
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" dags unpause -- climate 2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error unpausing climate DAG. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
 
 ENABLE_CICD=$(terraform output -raw enable_cicd 2>/dev/null || echo "false")
 
