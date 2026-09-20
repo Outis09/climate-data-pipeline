@@ -146,7 +146,7 @@ with DAG(
         consolidated_loc = agg_hourly_air_quality(parquet_paths=parquet_paths)
         return consolidated_loc
 
-    @task
+    @task(pool="gx_validation_pool")
     def validate_data(parquet_paths: list[str], api_source: str) -> list[str]:
         """Validate transformed data using Great Expectations Suites and Checkpoints"""
         from utils.validate import run_validation

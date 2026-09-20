@@ -11,5 +11,9 @@
     "db_upsert_pool": {
         "description": "Pool for Database Upsert Tasks",
         "slots": 4
+    },
+    "gx_validation_pool": {
+        "description":"Pool for GX Validation Tasks",
+        "slots": 4
     }
 }
