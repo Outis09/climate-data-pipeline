@@ -65,7 +65,7 @@ with DAG(
         return chunk_paths
     
 
-    @task(pool="nasa_power_extraction_pool")
+    @task(pool="nasa_power_extraction_pool", priority_weight=100)
     def fetch_daily_land_surface(parquet_chunk_path: str, data_interval_start: pendulum.DateTime) -> str:
         """Fetch daily land surface data and return path to saved extract"""
         from utils.extract import extract_daily_land_surface
