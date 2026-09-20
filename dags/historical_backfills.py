@@ -111,7 +111,7 @@ with DAG(
         return chunk_paths
 
         
-    @task
+    @task(pool="nasa_power_extraction_pool")
     def backfill_period_land_surface(period: list[str], cities_chunk_paths: list[str]) -> list[str]:
         """Extract land surface data for given city chunk data and period"""
         from utils.extract import extract_daily_land_surface
