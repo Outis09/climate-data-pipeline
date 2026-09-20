@@ -99,7 +99,7 @@ with DAG(
         return trnasformed_loc
 
 
-    @task
+    @task(pool="gx_validation_pool")
     def validate_data(parquet_paths: list[str], api_source: str)-> list[str]:
         """Run Great Expectations Checkpoint on transformed data"""
         from utils.validate import run_validation
