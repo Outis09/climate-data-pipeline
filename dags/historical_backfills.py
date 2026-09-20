@@ -111,7 +111,7 @@ with DAG(
         return chunk_paths
 
         
-    @task
+    @task(pool="nasa_power_extraction_pool")
     def backfill_period_land_surface(period: list[str], cities_chunk_paths: list[str]) -> list[str]:
         """Extract land surface data for given city chunk data and period"""
         from utils.extract import extract_daily_land_surface
@@ -217,7 +217,7 @@ with DAG(
             retries=2,
             pool="open_meteo_extraction_pool",
             pool_slots=1,
-            priority_weight=10
+            priority_weight=20
         )
 
         transform_air_quality = consolidate_daily_air_quality(parquet_paths=extract.output)
