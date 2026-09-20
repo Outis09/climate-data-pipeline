@@ -54,7 +54,7 @@ LOCATION=$(terraform output -raw region)
 PROJECT_ID=$(terraform output -raw project_id)
 
 
-if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" pools set -- --include-deferred nasa_power_extraction_pool 4 "Pool for NASA Power Extraction Tasks"  2>&1 | tee -a "$LOG_FILE"; then
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" pools set --  nasa_power_extraction_pool 4 "Pool for NASA Power Extraction Tasks"  2>&1 | tee -a "$LOG_FILE"; then
     echo "Error configuring NASA Power Extraction Pool for Composer Environment. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
     exit 1
 fi
@@ -64,8 +64,13 @@ if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$P
     exit 1
 fi
 
-if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" pools set -- --include-deferred db_upsert_pool 4 "Pool for DB Upsert Tasks"  2>&1 | tee -a "$LOG_FILE"; then
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" pools set --  db_upsert_pool 4 "Pool for DB Upsert Tasks"  2>&1 | tee -a "$LOG_FILE"; then
     echo "Error configuring DB Upsert Pool for Composer Environment. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" pools set --  gx_validation_pool 2 "Pool for GX Validation Tasks"  2>&1 | tee -a "$LOG_FILE"; then
+    echo "Error configuring GX Validation Pool for Composer Environment. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
     exit 1
 fi
 
