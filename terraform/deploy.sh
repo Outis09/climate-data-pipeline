@@ -100,7 +100,7 @@ echo "Cities data uploaded successfully to BigQuery." | tee -a "$LOG_FILE"
 
 echo "Setting up Great Expectations..." | tee -a "$LOG_FILE"
 
-# copy placeholder file into transformed file location for great expectations to run against
+# copy placeholder file into transformed file location for great expectations probes
 if ! gcloud storage cp ./placeholder.parquet "$CITIES_GCS_PREFIX/transformed/daily_climate/placeholder.parquet" --quiet 2>&1 | tee -a "$LOG_FILE"; then
     echo "Error uploading placeholder.parquet to GCS. Check the log at $LOG_FILE and try again." | tee -a "$LOG_FILE"
     exit 1
@@ -125,7 +125,7 @@ fi
 
 echo "Waiting for 2 minutes for dags to become available in Cloud Composer..."
 
-sleep 120
+sleep 180
 
 # unpausing the setup_gx dag to run
 if ! gcloud composer environments run "$COMPOSER_ENVIRONMENT_NAME" --project="$PROJECT_ID" --location="$LOCATION" dags unpause -- setup_great_expectations 2>&1 | tee -a "$LOG_FILE"; then
@@ -162,7 +162,7 @@ fi
 
 ENABLE_CICD=$(terraform output -raw enable_cicd 2>/dev/null || echo "false")
 
-if [[ "$ENABLE_CICD" == "true"]]; then
+if [[ "$ENABLE_CICD" == "true" ]]; then
     echo "CI/CD enabled. Running the CI/CD setup..."
 
     GITHUB_CONNECTION_NAME=$(terraform output -raw github_connection_name)
