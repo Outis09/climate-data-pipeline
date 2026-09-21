@@ -516,7 +516,7 @@ Airflow emits operational metrics through StatsD, which are collected by the mon
 
 Below is a snpashot of the Grafana dashboard. 
 
-![Sample Grafana Dashboard](<images/Sample Grafana Dashboard.png>)
+![Sample Grafana Dashboard](<images/Grafana Monitoring Dashbord - Development.png>)
 
 Note: The metrics tracker on the dashboard may change overtime, therefore users might see a different dashboard than this one.
 
