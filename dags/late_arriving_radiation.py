@@ -1,8 +1,71 @@
 from airflow.sdk import DAG, task
+import pendulum
+from airflow.providers.smtp.notifications.smtp import SmtpNotifier
+import os
 import pandas as pd
 from datetime import datetime
 from collections import defaultdict
 from airflow.sdk.exceptions import AirflowSkipException
+
+
+recipient_email = os.getenv('NOTIFICATION_EMAIL')
+
+
+# email template to send when task fails
+task_fail_notify = SmtpNotifier(
+        smtp_conn_id="smtp_default",
+        to=recipient_email,
+        subject="Airflow Failure: {{ ti.task_id }} in {{ dag.dag_id }}",
+        html_content="""
+    <h3>Task Failure Alert</h3>
+    <p><b>DAG:</b> {{ "".join(dag.dag_id) }}</p>
+    <p><b>Task:</b> {{ ti.task_id }}</p>
+    <p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
+    <p><b>Error Message:</b></p>
+    <pre style="color: #721c24;">
+    {{ exception }}
+    </pre>
+    <p><a href="{{ ti.log_url }}">Click here to view full Airflow logs</a></p>
+    
+"""
+    )
+
+# email template to send when dag succeeds
+dag_success_notify = SmtpNotifier(
+    smtp_conn_id="smtp_default",
+    to=recipient_email,
+    subject="Airflow Success | Late Arriving Radiation Data DAG Completed Successfully ",
+    html_content="""
+<h3 style="color: #155724;">DAG Completed Successfully</h3>
+
+<p><b>DAG:</b> {{ dag.dag_id }}</p>
+<p><b>Run ID:</b> {{ dag_run.run_id }}</p>
+<p><b>Execution Time:</b> {{ dag_run.logical_date }}</p>
+<p><b>Status:</b>
+    <span style="color: #155724; font-weight: bold;">
+        SUCCESS
+    </span>
+</p>
+
+<div style="color: #155724;">
+    All tasks in this DAG completed successfully.
+</div>
+
+<p>
+    <a href="{{ ti.log_url }}">Click here to view the Airflow logs</a>
+</p>
+"""
+)
+
+# default arguments for tasks
+default_args = {
+    "owner": "airflow",
+    "retries": 3,
+    "retry_delay": pendulum.duration(minutes=2),
+    "retry_exponential_backoff": True,
+    "max_retry_delay": pendulum.duration(hours=1), 
+    "on_failure_callback": task_fail_notify
+}
 
 with DAG(
     dag_id="late_arriving_radiation_data",
