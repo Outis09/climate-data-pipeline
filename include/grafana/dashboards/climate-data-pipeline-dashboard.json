@@ -4,19 +4,27 @@
   "metadata": {
     "name": "adtn5sx",
     "namespace": "default",
-    "uid": "6ac45f4b-cca2-4e03-8aa8-484b083d2949",
-    "resourceVersion": "1789754552911985",
-    "generation": 23,
-    "creationTimestamp": "2026-09-18T06:04:45Z",
+    "uid": "20530106-d826-40f6-9b0c-5c54c6badd33",
+    "resourceVersion": "1790005301209004",
+    "generation": 2,
+    "creationTimestamp": "2026-09-20T12:55:29Z",
     "labels": {
-      "grafana.app/deprecatedInternalID": "2015899809341440"
+      "grafana.app/deprecatedInternalID": "2979068098813952"
     },
     "annotations": {
-      "grafana.app/createdBy": "user:cfych82ysnrpcf",
-      "grafana.app/folder": "",
+      "grafana.app/createdBy": "access-policy:service",
+      "grafana.app/folder": "ffytr1stjb400f",
+      "grafana.app/managedBy": "classic-file-provisioning",
+      "grafana.app/managerAllowsEdits": "true",
+      "grafana.app/managerId": "Climate Pipeline",
       "grafana.app/saved-from-ui": "Grafana v13.0.9 (0b30eb6c90)",
-      "grafana.app/updatedBy": "user:cfych82ysnrpcf",
-      "grafana.app/updatedTimestamp": "2026-09-18T18:02:32Z"
+      "grafana.app/sourceChecksum": "35c1073a305bde2bcfbf9c28160bd024",
+      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/climate-data-pipeline-dashboard.json",
+      "grafana.app/sourceTimestamp": "1789807728000",
+      "grafana.app/updatedBy": "user:ffytr1qvw50xse",
+      "grafana.app/updatedTimestamp": "2026-09-21T15:41:41Z",
+      "grafana.app/folderTitle": "Climate Pipeline",
+      "grafana.app/folderUrl": "/dashboards/f/ffytr1stjb400f/climate-pipeline"
     }
   },
   "spec": {
@@ -90,7 +98,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "clamp_min(max(airflow_pipeline_backfill_years_requested), 1)",
+                        "expr": "clamp_min(max(airflow_pipeline_historical_years_requested),1)",
                         "instant": false,
                         "legendFormat": "__auto",
                         "range": true
@@ -172,93 +180,6 @@
                         "color": "red"
                       }
                     ]
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
-      "panel-11": {
-        "kind": "Panel",
-        "spec": {
-          "id": 11,
-          "title": "Cities Requested",
-          "description": "",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "datasource": {
-                        "name": "PBFA97CFB590B2093"
-                      },
-                      "spec": {
-                        "editorMode": "builder",
-                        "exemplar": false,
-                        "expr": "airflow_pipeline_global_cities_requested",
-                        "instant": true,
-                        "legendFormat": "__auto",
-                        "range": false
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "stat",
-            "version": "13.0.9",
-            "spec": {
-              "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "value": 0,
-                        "color": "green"
-                      },
-                      {
-                        "value": 80,
-                        "color": "red"
-                      }
-                    ]
-                  },
-                  "color": {
-                    "mode": "fixed",
-                    "fixedColor": "super-light-green"
                   }
                 },
                 "overrides": []
@@ -512,6 +433,7 @@
               },
               "fieldConfig": {
                 "defaults": {
+                  "decimals": 0,
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -781,7 +703,7 @@
         "kind": "Panel",
         "spec": {
           "id": 17,
-          "title": "Historical Range Coverage",
+          "title": "Overall Historical Range Coverage",
           "description": "",
           "links": [],
           "data": {
@@ -824,7 +746,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "airflow_pipeline_backfill_years_requested * 3",
+                        "expr": "(airflow_pipeline_historical_years_requested) * 3",
                         "instant": false,
                         "legendFormat": "__auto",
                         "range": true
@@ -901,6 +823,43 @@
                     "fixedColor": "super-light-green"
                   }
                 },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-18": {
+        "kind": "Panel",
+        "spec": {
+          "id": 18,
+          "title": "",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "13.0.9",
+            "spec": {
+              "options": {
+                "code": {
+                  "language": "plaintext",
+                  "showLineNumbers": false,
+                  "showMiniMap": false
+                },
+                "content": "## Climate Data Pipeline - Operational Monitoring\n",
+                "mode": "markdown"
+              },
+              "fieldConfig": {
+                "defaults": {},
                 "overrides": []
               }
             }
@@ -1219,7 +1178,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "clamp_min(max(airflow_pipeline_backfill_years_requested), 1)",
+                        "expr": "clamp_min(max(airflow_pipeline_historical_years_requested),1)",
                         "instant": false,
                         "legendFormat": "__auto",
                         "range": true
@@ -1355,7 +1314,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "clamp_min(max(airflow_pipeline_backfill_years_requested), 1)",
+                        "expr": "clamp_min(max(airflow_pipeline_historical_years_requested),1)",
                         "instant": false,
                         "legendFormat": "__auto",
                         "range": true
@@ -1455,6 +1414,19 @@
             "spec": {
               "x": 0,
               "y": 0,
+              "width": 24,
+              "height": 2,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-18"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 2,
               "width": 5,
               "height": 4,
               "element": {
@@ -1467,7 +1439,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 5,
-              "y": 0,
+              "y": 2,
               "width": 4,
               "height": 4,
               "element": {
@@ -1480,7 +1452,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 9,
-              "y": 0,
+              "y": 2,
               "width": 5,
               "height": 4,
               "element": {
@@ -1493,7 +1465,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 14,
-              "y": 0,
+              "y": 2,
               "width": 6,
               "height": 4,
               "element": {
@@ -1505,21 +1477,8 @@
           {
             "kind": "GridLayoutItem",
             "spec": {
-              "x": 20,
-              "y": 0,
-              "width": 4,
-              "height": 4,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-11"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
               "x": 0,
-              "y": 4,
+              "y": 6,
               "width": 12,
               "height": 8,
               "element": {
@@ -1532,7 +1491,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 12,
-              "y": 4,
+              "y": 6,
               "width": 12,
               "height": 8,
               "element": {
@@ -1545,7 +1504,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 0,
-              "y": 12,
+              "y": 14,
               "width": 12,
               "height": 8,
               "element": {
@@ -1558,7 +1517,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 12,
-              "y": 12,
+              "y": 14,
               "width": 12,
               "height": 8,
               "element": {
@@ -1571,7 +1530,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 0,
-              "y": 20,
+              "y": 22,
               "width": 9,
               "height": 5,
               "element": {
@@ -1584,7 +1543,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 9,
-              "y": 20,
+              "y": 22,
               "width": 8,
               "height": 5,
               "element": {
@@ -1597,7 +1556,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 17,
-              "y": 20,
+              "y": 22,
               "width": 7,
               "height": 5,
               "element": {
