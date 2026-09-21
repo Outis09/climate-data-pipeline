@@ -151,8 +151,8 @@ Fields used include:
 
 Cities are ranked by population and the pipeline processes up to the configured maximum number of locations for the selected country.
 
-
-**Licensing**: This project was developed using non-commercial access to its external data sources. Anyone intending to use the project commercially should independently review the current licensing and commercial-use requirements of each provider.
+> [!NOTE]
+> This project was developed using non-commercial access to its external data sources. Anyone intending to use the project commercially should independently review the current licensing and commercial-use requirements of each provider.
 
 
 ## Airflow Architecture
@@ -649,7 +649,7 @@ The GCP deployment uses managed Google Cloud security controls.
 
 The pipeline currently processes public climate and environmental data rather than personally identifiable information. Additional access, encryption, retention, and governance controls should be considered if private or sensitive data sources are introduced.
 
-> [!IMPORTANT]
+> [!WARNING]
 > Secrets, passwords, API credentials, Fernet keys, JWT secrets, and service-account keys must never be committed to the repository. 
 
 
