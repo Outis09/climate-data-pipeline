@@ -55,7 +55,7 @@ Infrastructure is provisioned through Terraform. Cloud Logging provides centrali
 |Local Runtime| Docker & Docker Compose|
 |Local Monitoring| Prometheus & Grafana|
 |Cloud Monitoring| Google Cloud Monitoring & Cloud Logging|
-|CI?CD| Google Cloud Build & GitHub| 
+|CI/CD| Google Cloud Build & GitHub| 
 |Deployment Automation| Bash|
 |External APIs| Open-Meteo, NASA POWER|
 
@@ -102,16 +102,12 @@ The calculation is described in [Open-Meteo's multi-location API article](https:
 
 The pipeline includes concurrency and quota-management mechanisms to reduce the likelihood of exceeding these limits.
 
-##### Data Availability 
-- Climate: 1 day (historical data available from 1950)
-- Air Quality: 0 days as endpoint provides forecast (however only up to 3 months of past data is available)
-- Flood: 0 days as it provides forecast up to 12 months (historical data available for 3 months)
+
 
 ### NASA Power:
 
 NASA POWER provides additional meteorological and land-surface parameters.
 
-Daily Parameters
 
 Parameters used by the pipeline include:
 
@@ -130,6 +126,7 @@ Parameters used by the pipeline include:
 Limitations
 - Maximum of 20 parameters per request per point.
 - Point requests accept one coordinate per request.
+- Concurrent requests are limited.
 - Parameter availability depends on the underlying NASA dataset.
 - Missing values may be represented using the -999 fill value.
 - NASA POWER data also has parameter-dependent latency:
@@ -157,7 +154,6 @@ Cities are ranked by population and the pipeline processes up to the configured 
 
 **Licensing**: This project was developed using non-commercial access to its external data sources. Anyone intending to use the project commercially should independently review the current licensing and commercial-use requirements of each provider.
 
-## Data Pipeline
 
 ## Airflow Architecture
 
@@ -192,15 +188,32 @@ The historical DAG is responsible for retrieving historical data.
 - Each batch passes independently through extraction, transformation, validation, and loading.
 - Task Groups enable depth-first execution so one period can continue through the pipeline without waiting for every other historical period to complete.
 
+### Late-Arriving Radiation Data DAG
+
+This DAG runs monthly to extract late-arriving radiation data from the NASA POWER API.
+
+- Runs monthly because NASA POWER currently releases late-data for a full month, with variable latency.
+- Uses the same DAG structure as the Historical Backfill but the first request probes for dat availability and only proceeds if data is available.
+- Extracted data is transformed, validated, and then upserted into the `daily_land_surface` table using `city_id` and `date` as unique identifiers.
+
 ### Dynamic Task Mapping
 
-Dynamic Task Mapping is used to scale extraction according to the amount of data being requested.
+Dynamic Task Mapping is used to scale extraction according to the amount of data being requested. It is used in two ways:
 
-City data is divided into chunks of 50 locations before extraction. During testing, requests containing 100 locations took more than three times as long to process as equivalent 50-location requests.
+#### City chunks
+The pipeline currently processes data for up to 100 cities for a given country. However, not all countries have 100 cities in the data. So the city extraction uses dynamic extraction because the number of cities at runtime is unknown.
 
-Airflow dynamically creates extraction tasks for these chunks rather than requiring a fixed number of tasks in the DAG definition.
+City data is divided into chunks of 50 locations before extraction. During testing, requests containing 100 locations took more than three times as long to process as equivalent 50-location requests. 
+
+Airflow dynamically creates extraction tasks for these chunks rather than requiring a fixed number of tasks in the DAG definition. These tasks can then run concurrently and complete in less time than it takes to process 100 cities at once.
 
 The resulting files are consolidated during transformation to create the dataset required for validation and loading.
+
+#### Depth-first Execution Using Task Groups
+Currently, users can set a historical start date or default to `2001-01-01`. Since the actual historical date at runtime is not known, dynamic task mapping divides the tasks into the number of years, so that each year processes separately.
+
+### Task Groups
+The `historical_backfill` DAG uses three task-groups (one for each data source). Task groups enable the DAG to execute depth-first. That means that if there are 20 dynamiccaly-mapped tasks, based on the years requested, each year is assigned to a group of extraction, transformation, validation, and upsert tasks. Therefore, each year's data can be fully processed even if other year's tasks are delayed or failing.
 
 ### Resource Pools
 
@@ -212,19 +225,22 @@ Limits concurrent database upsert operations to reduce  pressure on PostgreSQL o
 
 #### Open-Meteo Extraction Pool
 
-Limits simultaneous access to Open-Meteo and works with quota-aware deferral to reduce repeated requests after quota exhaustion.
+Limits simultaneous access to Open-Meteo and works with quota-aware deferral to reduce repeated requests after quota exhaustion. Includes deferred tasks so that multiple tasks do not hit the API after the quota has been hit, to avoid IP-banning.
 
 #### NASA POWER Extraction Pool
 Restricts concurrent NASA POWER extraction.
 
+#### GX Validation Pool
+Restricts conncurent access to GX expectation suites for data validation. Locally, multiple tasks can access the suites at the same time. However, in GCP, concurrent access leads to task failures, hence the pool.
+
 #### Task Prioritization
-Current daily ingestion is assigned higher scheduling priority than historical backfills.
+Currently,  daily ingestion is assigned higher scheduling priority than historical backfills.
 
 This allows large historical requests to run over an extended period without preventing current data from being processed.
 
 ### Deferrable Operators
 
-Open-Meteo extraction uses a custom Airflow operator built around Airflow deferral.
+Open-Meteo extraction uses a custom Airflow operator built around Airflow deferral and triggerers.
 
 When a rate-limit response is detected, the operator identifies the exhausted quota window and defers execution through the Airflow triggerer.
 
@@ -240,7 +256,17 @@ Once the waiting period has elapsed, the task is rescheduled and continues extra
 
 ### Retries:
 
+The pipeline uses a general retry policy of 3, with a retry delay of 2 minutes, and exponential backoff activated. This ensures that transient errors do not fail the pipeline. 
+
 ### Success/failure Notifications:
+
+The pipeline sends email notifications on DAG success and task failures. However, not all DAGs receive success notications
+
+The daily DAG only sends task failure notifications because daily success emails will overwhelm users and is likely to make users overlook failure notifications.
+
+The Historical DAG can only succeed once therefore it sends an email on success to indicate the completion of the DAG and complete availability of historical data. 
+
+The late-arriving data DAG also sends success notifications to signify the arrival of radiation data for a period.
 
 ## Data Transformation
 
@@ -289,6 +315,9 @@ Great Expectations provides a validation gate between transformation and loading
     - only validations with a severity of critical fail the task
     - validations with severity of warning are logged
 
+### Dead-letter Tables
+When a batch of data fails schema checks, the entire batch is dropped. However, when a few rows fail validation, those rows are inserted into dead-letter tables where users can preview them and decide to delete, preserve, or add to the main tables.
+
 ## Data Model
 The primary analytical tables are:
 
@@ -311,7 +340,7 @@ PostgreSQL uses conflict-aware upsert behaviour, while BigQuery cloud loading us
 
 ## Getting Started
 The project can be run either:
-- locally eit Docker or 
+- locally with Docker or 
 - on Google Cloud.
 
  Both deployment options use the same core Airflow pipelines but differ in their storage, database, monitoring, and infrastructure components.
@@ -381,6 +410,8 @@ The data is accessible through pgAdmin 4.
 3. Drop down the `Climate_Server` server.
 4. Table will be available in the `climate` schema.
 
+
+
 ### Option 2: GCP
 
 #### Prerequisites
@@ -437,6 +468,32 @@ Data will be available in BigQuery.
 
 #### Choosing a Deployment Option
 
+##### Local 
+
+###### Pros:
+- Zero infrastructure cost
+- Full control since data and infrastructure remains on user's machine
+- No cloud account required
+
+###### Cons:
+- User manages the pipeline (responsible for starting and stopping services)
+- Machine must stay running for scheduled pipeline runs
+- Limited by local resources (CPU, memory, and disk)
+- Less convenient for teams
+
+##### GCP 
+
+###### Pros:
+- Runs continuously (does not depend on the user's machine being switched on)
+- Less infrastructure management
+- Scalable
+- Centralized data access for teams
+- CI/CD can be configured
+
+###### Cons:
+- Ongoing cost (even though this project can be run using the $300 free credit GCP gives to new accounts)
+- More complex initial setup (requires a GCP project with billing enabled)
+- The deployment relies heavily on GCP services.
 
 
 ## Observability & Monitoring
@@ -450,6 +507,18 @@ Monitoring differs between the local and GCP deployments.
 The local deployment uses Airflow, StatsD, Prometheus, and Grafana.
 
 Airflow emits operational metrics through StatsD, which are collected by the monitoring stack and visualized in Grafana.
+
+#### Access the monitoring dashboard on Grafana.
+1. Open `localhost:3000` in a browser
+2. Select dashboards in the left panel
+3. Select the `Climate Data Pipeline Dashboard`
+4. Monitor dashboard as DAGs run.
+
+Below is a snpashot of the Grafana dashboard. 
+
+![Sample Grafana Dashboard](<images/Sample Grafana Dashboard.png>)
+
+Note: The metrics tracker on the dashboard may change overtime, therefore users might see a different dashboard than this one.
 
 ### GCP Monitoring
 
@@ -550,6 +619,40 @@ Infrastructure configuration is kept separate from application DAG code.
 
 ## Security
 
+Security controls differ between the local Docker and GCP deployments.
+
+### Docker Deployment
+
+The Docker deployment is designed for use on a trusted local machine.
+
+- **Secrets**: Credentials and configuration are stored in a local .env file, which is excluded from version control. .env.example contains only placeholders.
+- **Generated secrets**: Airflow Fernet and JWT secrets are generated during setup rather than shared across installations.
+- **Database access**: PostgreSQL is bound to 127.0.0.1, preventing access from external network interfaces while remaining accessible to local tools such as pgAdmin.
+- **Internal networking**: Airflow, PostgreSQL, Prometheus, Grafana, StatsD, and other services communicate through the internal Docker network. Only services requiring user access expose host ports.
+- **Credentials**: Database and Airflow credentials are supplied through environment variables/Airflow connections rather than hard-coded in DAGs or application code.
+External APIs: Open-Meteo and NASA POWER are accessed over HTTPS and currently require no API credentials.
+- **Monitoring**: Grafana, Prometheus, Airflow, and pgAdmin are intended for local access and should not be exposed publicly without additional authentication and network controls.
+
+Users are responsible for securing their host machine, Docker installation, .env file, persisted volumes, and locally exposed interfaces.
+
+### GCP Deployment
+
+The GCP deployment uses managed Google Cloud security controls.
+
+- **IAM**: Cloud Composer, BigQuery, Cloud Storage, Cloud Build, Secret Manager, and Cloud Monitoring access is controlled through IAM using least-privilege permissions.
+- **Authentication**: Workloads use service accounts and Google Application Default Credentials instead of service-account keys stored in the repository.
+- **Secret management**: Sensitive values, including SMTP and Airflow connection credentials, are stored in Secret Manager rather than DAGs or deployment scripts.
+- **Data access**: BigQuery datasets and Cloud Storage resources are protected using IAM and are not intended for public access.
+- **CI/CD**: Cloud Build uses its service identity to test and deploy changes, avoiding long-lived cloud credentials in the repository.
+- **Infrastructure**: GCP resources are provisioned through Terraform, making infrastructure and security-related changes reproducible and reviewable. Terraform state should be treated as sensitive.
+- **Logging and monitoring**: Logs and custom metrics contain operational information only; secrets and connection strings should never be emitted.
+
+The pipeline currently processes public climate and environmental data rather than personally identifiable information. Additional access, encryption, retention, and governance controls should be considered if private or sensitive data sources are introduced.
+
+> [!IMPORTANT]
+> Secrets, passwords, API credentials, Fernet keys, JWT secrets, and service-account keys must never be committed to the repository. 
+
+
 ## Known Limitations
 - Non-commercial API quotas constrain the speed of large historical backfills.
 - Historical availability differs between datasets and variables.
@@ -557,11 +660,15 @@ Infrastructure configuration is kept separate from application DAG code.
 - Large historical backfills may intentionally take several days because API quotas are respected.
 - Air-quality historical coverage is not equivalent to long-term climate coverage.
 - The project is currently designed around a configurable subset of the most populated cities rather than unrestricted global-scale ingestion.
+- The free version of the `SimpliMaps` cities data used may not contain all cities for a selected country. However, if auser desires, they can purchase the premium version and plug it into the project, instead of the free version. 
 - External API schema, availability, and licensing changes can affect extraction.
 - Local Docker resources can constrain highly concurrent transformations or database loads.
 - Great Expectations range checks identify potentially suspicious values but do not establish scientific validity.
 
 ## Acknowledgements
+
+These are API sources, books, and blogs with code samples that were used in this project.
+
 - [Open-Meteo API](https://open-meteo.com/en/docs/climate-api)
 - [NASA POWER API](https://power.larc.nasa.gov/docs/services/api/)
 - [Data Pipelines with Apache Airflow](https://www.astronomer.io/ebooks/data-pipelines-with-apache-airflow/)
