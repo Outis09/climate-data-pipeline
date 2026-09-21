@@ -65,7 +65,7 @@ dag_success_notify = SmtpNotifier(
 default_args = {
     "owner": "airflow",
     "retries": 3,
-    "retr_delay": pendulum.duration(minutes=2),
+    "retry_delay": pendulum.duration(minutes=2),
     "retry_exponential_backoff": True,
     "max_retry_delay": pendulum.duration(hours=1), 
     "on_failure_callback": task_fail_notify
