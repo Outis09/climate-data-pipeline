@@ -1,0 +1,28 @@
+# -------------------------GCP configuration (required)-------------------------
+project_id = "your-project-id-1234"
+region = ""
+
+# -------------------------Pipeline Resource Provision (required)-------------------------
+service_account_name = "climate-pipeline-sa"
+composer_environment_name = "climate-composer-env"
+bq_location = "US"
+bucket_name = "your-unique-bucket-name"
+bigquery_dataset_name = "climate_data_dataset"
+climate_country = "Ghana"
+historical_data_start_date = "2024-01-01"
+
+# -------------------------Pipeline Email Notifications-------------------------
+user_email = ""
+recipient_email = ""
+
+# -------------------------CI/CD-------------------------
+enable_ci_cd = false
+secret_id = "some-secret-id"
+github_pat = "github_personal_access_token
+connection_name = "github-cloudbuild-connection"
+installation_id = "0000000000"
+project_number = "0000000000"
+repository_name = "climate-data-pipeline"
+remote_uri = "https://github.com/Outis09/climate-data-pipeline.git"
+
+
