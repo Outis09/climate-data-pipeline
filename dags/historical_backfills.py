@@ -37,7 +37,7 @@ task_fail_notify = SmtpNotifier(
 # email template to send when dag succeeds
 dag_success_notify = SmtpNotifier(
     smtp_conn_id="smtp_default",
-    to="sshakurace@gmail.com",
+    to=recipient_email,
     subject="Airflow Success | Historical Data Retrieval DAG Completed Successfully ",
     html_content="""
 <h3 style="color: #155724;">DAG Completed Successfully</h3>
