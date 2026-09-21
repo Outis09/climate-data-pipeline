@@ -20,6 +20,9 @@ def extract_cities() -> list[str]:
     """Get a country's cities' data based on storage type"""
     storage_type = os.getenv('STORAGE_BACKEND')
     country = os.getenv('CLIMATE_COUNTRY')
+    if not country:
+        country = 'Ghana'
+    country = country.lower()
     if storage_type == 'local':
         paths = extract_cities_postgres(country)
     elif storage_type == 'gcs':
@@ -36,7 +39,7 @@ def extract_cities_postgres(country: str) -> list[str]:
     hook = PostgresHook(postgres_conn_id='weather_db')
     sql_query = f"""SELECT city_id, lat, lng 
                     FROM climate.cities 
-                    WHERE country = '{country}'
+                    WHERE LOWER(country) = '{country}'
                     ORDER BY population DESC
                     LIMIT 100;
                 """
@@ -81,7 +84,7 @@ def extract_cities_bigquery(country: str) -> list[str]:
     query = f"""
     SELECT city_id, lat, lng
     FROM `{dataset}.cities`
-    WHERE country = @country
+    WHERE LOWER(country) = @country
     ORDER BY population desc
     LIMIT 100;
 """
